@@ -6,13 +6,18 @@
         "--security-opt", "seccomp=unconfined"
     ],
 
-    // Set *default* container specific settings.json values on container create.
-    "settings": {},
-
-    // Add the IDs of extensions you want installed when the container is created.
-    "extensions": [
-        "ms-vscode.cpptools-extension-pack"
-    ],
+	// Configure tool-specific properties.
+	"customizations": {
+		// Configure properties specific to VS Code.
+		"vscode": {
+			// Add the IDs of extensions you want installed when the container is created.
+			"extensions": [
+                "ms-vscode.cpptools-extension-pack"
+			],
+			// Set *default* container specific settings.json values on container create.
+			"settings": {}
+		}
+    },
 
     // Use 'forwardPorts' to make a list of ports inside the container available locally.
     // "forwardPorts": [],
@@ -24,6 +29,6 @@
     "remoteUser": "vscode",
 
     "mounts": [
-        "source=${localEnv:HOME}/data/gromacs-ramd,target=/data,type=bind,consistency=cached"
+        "source=/hits/fast/its/doserbd/data/gromacs-ramd,target=/data,type=bind,consistency=cached"
     ]
 }
