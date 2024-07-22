@@ -69,7 +69,7 @@
 namespace nblib
 {
 
-int64_t findNumEnergyGroups(gmx::ArrayRef<int64_t> particleInteractionFlags)
+int32_t findNumEnergyGroups(gmx::ArrayRef<int32_t> particleInteractionFlags)
 {
     auto groupId = [](int code1, int code2) {
         return (code1 & gmx::sc_atomInfo_EnergyGroupIdMask) < (code2 & gmx::sc_atomInfo_EnergyGroupIdMask);
@@ -139,9 +139,9 @@ Nbnxm::KernelSetup createKernelSetupGPU(const bool useTabulatedEwaldCorr)
     return kernelSetup;
 }
 
-std::vector<int64_t> createParticleInfoAllVdw(const size_t numParticles)
+std::vector<int32_t> createParticleInfoAllVdw(const size_t numParticles)
 {
-    std::vector<int64_t> particleInfoAllVdw(numParticles);
+    std::vector<int32_t> particleInfoAllVdw(numParticles);
     for (size_t particleI = 0; particleI < numParticles; particleI++)
     {
         particleInfoAllVdw[particleI] |= gmx::sc_atomInfo_HasVdw;
@@ -281,6 +281,12 @@ std::unique_ptr<nonbonded_verlet_t> createNbnxmCPU(const size_t              num
                                                    int                       numEnergyGroups,
                                                    gmx::ArrayRef<const real> nonbondedParameters)
 {
+    if (nonbondedParameters.size() != numParticleTypes * numParticleTypes * 2)
+    {
+        throw InputException(
+                "The size of the non-bonded parameter matrix does not match numParticleTypes");
+    }
+
     const auto pinPolicy  = gmx::PinningPolicy::CannotBePinned;
     const int  numThreads = options.numOpenMPThreads;
 
@@ -299,8 +305,8 @@ std::unique_ptr<nonbonded_verlet_t> createNbnxmCPU(const size_t              num
                                                        kernelSetup.kernelType,
                                                        std::nullopt,
                                                        LJCombinationRule::None,
-                                                       numParticleTypes,
                                                        nonbondedParameters,
+                                                       true,
                                                        numEnergyGroups,
                                                        numThreads);
 
@@ -317,6 +323,12 @@ std::unique_ptr<nonbonded_verlet_t> createNbnxmGPU(const size_t               nu
                                                    const interaction_const_t& interactionConst,
                                                    const gmx::DeviceStreamManager& deviceStreamManager)
 {
+    if (nonbondedParameters.size() != numParticleTypes * numParticleTypes * 2)
+    {
+        throw InputException(
+                "The size of the non-bonded parameter matrix does not match numParticleTypes");
+    }
+
     const auto pinPolicy = gmx::PinningPolicy::PinnedIfSupported;
 
     Nbnxm::KernelSetup kernelSetup = createKernelSetupGPU(options.useTabulatedEwaldCorr);
@@ -333,8 +345,8 @@ std::unique_ptr<nonbonded_verlet_t> createNbnxmGPU(const size_t               nu
                                                        kernelSetup.kernelType,
                                                        std::nullopt,
                                                        LJCombinationRule::None,
-                                                       numParticleTypes,
                                                        nonbondedParameters,
+                                                       true,
                                                        numEnergyGroups,
                                                        numThreadsInit);
 

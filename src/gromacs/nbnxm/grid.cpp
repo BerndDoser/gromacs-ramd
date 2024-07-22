@@ -800,7 +800,7 @@ static void print_bbsizes_supersub(FILE* fp, const Grid& grid)
 static void sort_cluster_on_flag(int                          numAtomsInCluster,
                                  int                          atomStart,
                                  int                          atomEnd,
-                                 gmx::ArrayRef<const int64_t> atomInfo,
+                                 gmx::ArrayRef<const int32_t> atomInfo,
                                  gmx::ArrayRef<int>           order,
                                  int*                         flags)
 {
@@ -878,7 +878,7 @@ void Grid::fillCell(GridSetData*                   gridSetData,
                     nbnxn_atomdata_t*              nbat,
                     int                            atomStart,
                     int                            atomEnd,
-                    gmx::ArrayRef<const int64_t>   atomInfo,
+                    gmx::ArrayRef<const int32_t>   atomInfo,
                     gmx::ArrayRef<const gmx::RVec> x)
 {
     const int numAtoms = atomEnd - atomStart;
@@ -1023,7 +1023,7 @@ void Grid::fillCell(GridSetData*                   gridSetData,
 
 void Grid::sortColumnsCpuGeometry(GridSetData*                   gridSetData,
                                   int                            dd_zone,
-                                  gmx::ArrayRef<const int64_t>   atomInfo,
+                                  gmx::ArrayRef<const int32_t>   atomInfo,
                                   gmx::ArrayRef<const gmx::RVec> x,
                                   nbnxn_atomdata_t*              nbat,
                                   const gmx::Range<int>          columnRange,
@@ -1098,7 +1098,7 @@ void Grid::sortColumnsCpuGeometry(GridSetData*                   gridSetData,
 /* Spatially sort the atoms within one grid column */
 void Grid::sortColumnsGpuGeometry(GridSetData*                   gridSetData,
                                   int                            dd_zone,
-                                  gmx::ArrayRef<const int64_t>   atomInfo,
+                                  gmx::ArrayRef<const int32_t>   atomInfo,
                                   gmx::ArrayRef<const gmx::RVec> x,
                                   nbnxn_atomdata_t*              nbat,
                                   const gmx::Range<int>          columnRange,
@@ -1166,9 +1166,8 @@ void Grid::sortColumnsGpuGeometry(GridSetData*                   gridSetData,
                 const int numAtoms =
                         std::min(numAtomsPerCell, numAtomsInColumn - (atomOffsetZ - atomOffset));
 
-                numClusters_[cell] = std::min(
-                        c_gpuNumClusterPerCell,
-                        (numAtoms + geometry_.numAtomsICluster - 1) / geometry_.numAtomsICluster);
+                numClusters_[cell] = std::min(c_gpuNumClusterPerCell,
+                                              gmx::divideRoundUp(numAtoms, geometry_.numAtomsICluster));
 
                 /* Store the z-boundaries of the bounding box of the cell */
                 bbcz_[cell].lower = x[atomIndices[atomOffsetZ]][ZZ];
@@ -1367,7 +1366,7 @@ void Grid::setCellIndices(int                            ddZone,
                           GridSetData*                   gridSetData,
                           gmx::ArrayRef<GridWork>        gridWork,
                           const gmx::Range<int>          atomRange,
-                          gmx::ArrayRef<const int64_t>   atomInfo,
+                          gmx::ArrayRef<const int>       atomInfo,
                           gmx::ArrayRef<const gmx::RVec> x,
                           const int                      numAtomsMoved,
                           nbnxn_atomdata_t*              nbat)
@@ -1400,7 +1399,7 @@ void Grid::setCellIndices(int                            ddZone,
         {
             cxy_na_i += gridWork[thread].numAtomsPerColumn[i];
         }
-        ncz = (cxy_na_i + numAtomsPerCell - 1) / numAtomsPerCell;
+        ncz = gmx::divideRoundUp(cxy_na_i, numAtomsPerCell);
         if (geometry_.numAtomsJCluster == 2 * numAtomsPerCell)
         {
             /* Make the number of cell a multiple of 2 */
