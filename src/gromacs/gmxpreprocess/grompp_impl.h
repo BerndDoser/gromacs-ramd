@@ -138,9 +138,9 @@ struct InteractionsOfType
     //! The different parameters in the system.
     std::vector<InteractionOfType> interactionTypes;
     //! CMAP grid spacing.
-    int cmakeGridSpacing = -1;
-    //! Number of cmap angles.
-    int cmapAngles = -1;
+    int cmapGridSpacing_ = -1;
+    //! Number of CMAP dihedral angle pairs.
+    int numCmaps_ = -1;
     //! CMAP grid data.
     std::vector<real> cmap;
     //! The five atomtypes followed by a number that identifies the type.
@@ -149,9 +149,9 @@ struct InteractionsOfType
     //! Number of parameters.
     size_t size() const { return interactionTypes.size(); }
     //! Elements in cmap grid data.
-    int ncmap() const { return cmap.size(); }
+    std::size_t ncmap() const { return cmap.size(); }
     //! Number of elements in cmapAtomTypes.
-    int nct() const { return cmapAtomTypes.size(); }
+    std::size_t nct() const { return cmapAtomTypes.size(); }
 };
 
 struct t_excls

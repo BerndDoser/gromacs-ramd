@@ -1378,7 +1378,7 @@ void check_ir(const char*                    mdparin,
                 ir->nstcomm,
                 enumValueToString(ir->etc));
         CHECK(ir->nstcomm > 1 && (ir->etc == TemperatureCoupling::Andersen));
-        if (opts->nshake != 0)
+        if (opts->nshake != 0 && ir->etc == TemperatureCoupling::Andersen)
         {
             auto message = gmx::formatString(
                     "%s temperature control does not work with constraints. "
@@ -3885,13 +3885,13 @@ static void processEnsembleTemperature(t_inputrec* ir, const bool allAtomsCouple
     }
 }
 
-void do_index(const char*                    mdparin,
-              const char*                    ndx,
-              gmx_mtop_t*                    mtop,
-              bool                           bVerbose,
-              const gmx::MDModulesNotifiers& mdModulesNotifiers,
-              t_inputrec*                    ir,
-              WarningHandler*                wi)
+void do_index(const char*                                 mdparin,
+              const std::optional<std::filesystem::path>& ndx,
+              gmx_mtop_t*                                 mtop,
+              bool                                        bVerbose,
+              const gmx::MDModulesNotifiers&              mdModulesNotifiers,
+              t_inputrec*                                 ir,
+              WarningHandler*                             wi)
 {
     int       natoms;
     t_symtab* symtab;
@@ -3907,9 +3907,9 @@ void do_index(const char*                    mdparin,
         fprintf(stderr, "processing index file...\n");
     }
     std::vector<IndexGroup> defaultIndexGroups;
-    if (ndx != nullptr)
+    if (ndx)
     {
-        defaultIndexGroups = init_index(ndx);
+        defaultIndexGroups = init_index(ndx.value());
     }
     else
     {
