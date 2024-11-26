@@ -39,6 +39,9 @@
 #include <cstdlib>
 
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
+#include "gromacs/utility/basedefinitions.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/strconvert.h"
 #include "gromacs/utility/txtdump.h"
 
@@ -186,4 +189,9 @@ void pr_rvecs(FILE* fp, int indent, const char* title, const rvec vec[], int n)
             fprintf(fp, "}\n");
         }
     }
+}
+
+void prRVecs(FILE* fp, int indent, const char* title, gmx::ArrayRef<const gmx::RVec> vec)
+{
+    pr_rvecs(fp, indent, title, as_rvec_array(vec.data()), vec.size());
 }

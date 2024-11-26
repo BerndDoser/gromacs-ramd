@@ -42,6 +42,8 @@
 
 #include "gromacs/onlinehelp/helpwritercontext.h"
 
+#include <cstdio>
+
 #include <string>
 
 #include <gtest/gtest.h>
@@ -53,6 +55,10 @@
 
 #include "testutils/stringtest.h"
 
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
@@ -219,3 +225,5 @@ TEST_F(HelpWriterContextTest, FormatsTitles)
 }
 
 } // namespace
+} // namespace test
+} // namespace gmx

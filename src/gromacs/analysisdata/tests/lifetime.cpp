@@ -48,6 +48,9 @@
 
 #include "gromacs/analysisdata/modules/lifetime.h"
 
+#include <memory>
+#include <string>
+
 #include <gtest/gtest.h>
 
 #include "gromacs/analysisdata/analysisdata.h"
@@ -57,6 +60,10 @@
 
 using gmx::test::AnalysisDataTestInput;
 
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
@@ -169,3 +176,5 @@ TEST_F(LifetimeModuleTest, HandlesMultipleDataSets)
 }
 
 } // namespace
+} // namespace test
+} // namespace gmx

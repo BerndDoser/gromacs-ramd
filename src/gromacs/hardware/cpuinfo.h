@@ -72,7 +72,7 @@ public:
         None,                //!< No cpu information whatsoever. Sorry.
         Name,                //!< Only vendor and/or brand is set
         Features,            //!< Some features are set
-        LogicalProcessorInfo //!< Everything includling logical processor information
+        LogicalProcessorInfo //!< Everything including logical processor information
     };
 
     /*! \brief Processor/system vendors */
@@ -271,7 +271,7 @@ private:
     int                           stepping_;          //!<  Minor version of current cpu
     std::set<Feature>             features_;          //!< Set of features supported on this cpu
     std::vector<LogicalProcessor> logicalProcessors_; //!< Simple logical processor topology
-};                                                    // class CpuInfo
+}; // class CpuInfo
 
 /*! \brief Return true if the CPU is an Intel x86 Nehalem
  *

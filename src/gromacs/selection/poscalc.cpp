@@ -70,6 +70,7 @@
 #include "gromacs/math/vec.h"
 #include "gromacs/selection/indexutil.h"
 #include "gromacs/selection/position.h"
+#include "gromacs/topology/block.h"
 #include "gromacs/trajectory/trajectoryframe.h"
 #include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/exceptions.h"
@@ -364,12 +365,20 @@ PositionCalculationCollection::Impl::Impl() :
 
 PositionCalculationCollection::Impl::~Impl()
 {
-    // Loop backwards, because there can be internal references in that are
+    // Loop backwards, because there can be internal references that are
     // correctly handled by this direction.
     while (last_ != nullptr)
     {
-        GMX_ASSERT(last_->refcount == 1, "Dangling references to position calculations");
-        gmx_ana_poscalc_free(last_);
+        if (last_->refcount != 1)
+        {
+            std::fprintf(stderr,
+                         "Warning: Dangling references to position calculations. Refcount = %d\n",
+                         last_->refcount);
+        }
+        else
+        {
+            gmx_ana_poscalc_free(last_);
+        }
     }
 }
 

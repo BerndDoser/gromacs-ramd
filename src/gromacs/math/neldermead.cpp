@@ -42,7 +42,11 @@
 
 #include "gromacs/math/neldermead.h"
 
+#include <cmath>
+
 #include <algorithm>
+#include <functional>
+#include <iterator>
 #include <list>
 #include <numeric>
 #include <vector>
@@ -50,6 +54,7 @@
 #include "gromacs/math/utilities.h"
 #include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/real.h"
 
 namespace gmx
 {
@@ -121,8 +126,8 @@ NelderMeadSimplex::NelderMeadSimplex(const std::function<real(ArrayRef<const rea
         simplex_.push_back({ initalVertex, f(initalVertex) });
         v = oldValue;
     }
-    simplex_.sort([](const RealFunctionvalueAtCoordinate& lhs,
-                     const RealFunctionvalueAtCoordinate& rhs) { return lhs.value_ < rhs.value_; });
+    simplex_.sort([](const RealFunctionvalueAtCoordinate& lhs, const RealFunctionvalueAtCoordinate& rhs)
+                  { return lhs.value_ < rhs.value_; });
     updateCentroidAndReflectionPoint();
 }
 
@@ -195,7 +200,8 @@ void NelderMeadSimplex::shrinkSimplexPointsExceptBest(const std::function<real(A
     std::transform(std::next(std::begin(simplex_)),
                    std::end(simplex_),
                    std::next(std::begin(simplex_)),
-                   [bestPointCoordinate, f](const RealFunctionvalueAtCoordinate& d) -> RealFunctionvalueAtCoordinate {
+                   [bestPointCoordinate, f](const RealFunctionvalueAtCoordinate& d) -> RealFunctionvalueAtCoordinate
+                   {
                        const std::vector<real> shrinkPoint =
                                linearCombination(defaultNelderMeadParameters.sigma_,
                                                  d.coordinate_,
@@ -204,8 +210,8 @@ void NelderMeadSimplex::shrinkSimplexPointsExceptBest(const std::function<real(A
                        return { shrinkPoint, f(shrinkPoint) };
                    });
 
-    simplex_.sort([](const RealFunctionvalueAtCoordinate& lhs,
-                     const RealFunctionvalueAtCoordinate& rhs) { return lhs.value_ < rhs.value_; });
+    simplex_.sort([](const RealFunctionvalueAtCoordinate& lhs, const RealFunctionvalueAtCoordinate& rhs)
+                  { return lhs.value_ < rhs.value_; });
 
     // now that the simplex has changed, it has a new centroid and reflection point
     updateCentroidAndReflectionPoint();
@@ -220,10 +226,11 @@ real NelderMeadSimplex::orientedLength() const
     {
         const std::vector<real> differenceVector =
                 linearCombination(1, firstSimplexVertexCoordinate, -1, simplexVertex.coordinate_);
-        const real thisLength = std::accumulate(
-                std::begin(differenceVector), std::end(differenceVector), 0., [](real sum, real value) {
-                    return sum + value * value;
-                });
+        const real thisLength =
+                std::accumulate(std::begin(differenceVector),
+                                std::end(differenceVector),
+                                0.,
+                                [](real sum, real value) { return sum + value * value; });
         result = std::max(result, thisLength);
     }
     return std::sqrt(result);
@@ -237,7 +244,8 @@ void NelderMeadSimplex::updateCentroidAndReflectionPoint()
             std::accumulate(std::next(std::begin(simplex_)),
                             std::prev(std::end(simplex_)),
                             simplex_.front().coordinate_,
-                            [](std::vector<real> sum, const RealFunctionvalueAtCoordinate& x) {
+                            [](std::vector<real> sum, const RealFunctionvalueAtCoordinate& x)
+                            {
                                 std::transform(std::begin(sum),
                                                std::end(sum),
                                                std::begin(x.coordinate_),

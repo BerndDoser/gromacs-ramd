@@ -42,6 +42,14 @@
 
 #include "gromacs/taskassignment/decidesimulationworkload.h"
 
+#include "config.h"
+
+#include <cstdint>
+
+#include <bitset>
+#include <memory>
+#include <vector>
+
 #include "gromacs/essentialdynamics/edsam.h"
 #include "gromacs/ewald/pme.h"
 #include "gromacs/listed_forces/listed_forces.h"
@@ -49,19 +57,31 @@
 #include "gromacs/mdlib/force_flags.h"
 #include "gromacs/mdtypes/forcerec.h"
 #include "gromacs/mdtypes/iforceprovider.h"
+#include "gromacs/mdtypes/inputrec.h"
+#include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/multipletimestepping.h"
+#include "gromacs/mdtypes/simulation_workload.h"
 #include "gromacs/pulling/pull.h"
 #include "gromacs/taskassignment/decidegpuusage.h"
 #include "gromacs/taskassignment/taskassignment.h"
+#include "gromacs/topology/ifunc.h"
 #include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/logger.h"
+
+struct gmx_edsam;
+struct pull_t;
 
 namespace gmx
 {
 
-SimulationWorkload createSimulationWorkload(const t_inputrec& inputrec,
-                                            const bool        disableNonbondedCalculation,
+SimulationWorkload createSimulationWorkload(const gmx::MDLogger& mdlog,
+                                            const t_inputrec&    inputrec,
+                                            const bool           useReplicaExchange,
+                                            const bool           disableNonbondedCalculation,
                                             const DevelopmentFeatureFlags& devFlags,
+                                            bool       haveFillerParticlesInLocalState,
                                             bool       havePpDomainDecomposition,
                                             bool       haveSeparatePmeRank,
                                             bool       useGpuForNonbonded,
@@ -82,12 +102,13 @@ SimulationWorkload createSimulationWorkload(const t_inputrec& inputrec,
     simulationWorkload.useGpuNonbonded = useGpuForNonbonded;
     simulationWorkload.useCpuPme       = (pmeRunMode == PmeRunMode::CPU);
     simulationWorkload.useGpuPme = (pmeRunMode == PmeRunMode::GPU || pmeRunMode == PmeRunMode::Mixed);
-    simulationWorkload.useGpuPmeFft              = (pmeRunMode == PmeRunMode::GPU);
-    simulationWorkload.useGpuBonded              = useGpuForBonded;
-    simulationWorkload.useGpuUpdate              = useGpuForUpdate;
-    simulationWorkload.havePpDomainDecomposition = havePpDomainDecomposition;
-    simulationWorkload.useCpuHaloExchange        = havePpDomainDecomposition && !useGpuDirectHalo;
-    simulationWorkload.useGpuHaloExchange        = useGpuDirectHalo;
+    simulationWorkload.useGpuPmeFft                    = (pmeRunMode == PmeRunMode::GPU);
+    simulationWorkload.useGpuBonded                    = useGpuForBonded;
+    simulationWorkload.useGpuUpdate                    = useGpuForUpdate;
+    simulationWorkload.haveFillerParticlesInLocalState = haveFillerParticlesInLocalState;
+    simulationWorkload.havePpDomainDecomposition       = havePpDomainDecomposition;
+    simulationWorkload.useCpuHaloExchange = havePpDomainDecomposition && !useGpuDirectHalo;
+    simulationWorkload.useGpuHaloExchange = useGpuDirectHalo;
     if (pmeRunMode == PmeRunMode::None)
     {
         GMX_RELEASE_ASSERT(!haveSeparatePmeRank, "Can not have separate PME rank(s) without PME.");
@@ -107,22 +128,41 @@ SimulationWorkload createSimulationWorkload(const t_inputrec& inputrec,
     simulationWorkload.haveEwaldSurfaceContribution = haveEwaldSurfaceContribution(inputrec);
     simulationWorkload.useMts                       = inputrec.useMts;
     const bool featuresRequireGpuBufferOps = useGpuForUpdate || simulationWorkload.useGpuDirectCommunication;
-    simulationWorkload.useGpuXBufferOpsWhenAllowed =
-            (devFlags.enableGpuBufferOps || featuresRequireGpuBufferOps) && !inputrec.useMts;
-    simulationWorkload.useGpuFBufferOpsWhenAllowed =
-            (devFlags.enableGpuBufferOps || featuresRequireGpuBufferOps) && !inputrec.useMts;
-    if (simulationWorkload.useGpuXBufferOpsWhenAllowed || simulationWorkload.useGpuFBufferOpsWhenAllowed)
+
+    const bool disableGpuBufferOps = (getenv("GMX_GPU_DISABLE_BUFFER_OPS") != nullptr);
+    if (disableGpuBufferOps)
     {
-        GMX_ASSERT(simulationWorkload.useGpuNonbonded,
-                   "Can only offload X/F buffer ops if nonbonded computation is also offloaded");
+        GMX_LOG(mdlog.warning)
+                .asParagraph()
+                .appendTextFormatted(
+                        "The 'GPU buffer ops' disabled by the "
+                        "GMX_GPU_DISABLE_BUFFER_OPS environment variable.");
     }
+    // x/f transform is done on GPU by default unless it is not unsupported (with MTS) or disabled (with the env. var.)
+    simulationWorkload.useGpuXBufferOpsWhenAllowed =
+            (GMX_GPU_CUDA || GMX_GPU_SYCL) && useGpuForNonbonded && !inputrec.useMts
+            && !(useReplicaExchange && !useGpuForUpdate) && !disableGpuBufferOps;
+    simulationWorkload.useGpuFBufferOpsWhenAllowed =
+            (GMX_GPU_CUDA || GMX_GPU_SYCL) && useGpuForNonbonded && !inputrec.useMts
+            && !(useReplicaExchange && !useGpuForUpdate) && !disableGpuBufferOps;
+    if (featuresRequireGpuBufferOps)
+    {
+        GMX_RELEASE_ASSERT(simulationWorkload.useGpuXBufferOpsWhenAllowed
+                                   && simulationWorkload.useGpuFBufferOpsWhenAllowed,
+                           "Offload features enabled require X/F buffer ops");
+    }
+    // SYCL Graph API only captures work submitted to the SYCL queue.
+    // Disallow use of native FFT libraries until ext_codeplay_enqueue_native_command is used.
+    constexpr bool haveSyclWithGraphIncompatibleGpuFftLibrary =
+            GMX_GPU_SYCL && !(GMX_GPU_FFT_BBFFT || GMX_GPU_FFT_MKL || GMX_GPU_FFT_ONEMKL);
     simulationWorkload.useMdGpuGraph =
             devFlags.enableCudaGraphs && useGpuForUpdate
             && (simulationWorkload.haveSeparatePmeRank ? simulationWorkload.useGpuPmePpCommunication : true)
             && (havePpDomainDecomposition ? simulationWorkload.useGpuHaloExchange : true)
-            && (havePpDomainDecomposition ? (GMX_THREAD_MPI > 0) : true);
+            && (havePpDomainDecomposition ? (GMX_THREAD_MPI > 0) : true)
+            && !(haveSyclWithGraphIncompatibleGpuFftLibrary && simulationWorkload.useGpuPmeFft);
 
-    simulationWorkload.useNvshmem = devFlags.enableNvshmem && simulationWorkload.useGpuPmePpCommunication;
+    simulationWorkload.useNvshmem = devFlags.enableNvshmem && simulationWorkload.useGpuDirectCommunication;
     return simulationWorkload;
 }
 

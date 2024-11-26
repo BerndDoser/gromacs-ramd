@@ -44,14 +44,25 @@
 
 #include "dump.h"
 
+#include <cstdio>
+
+#include <array>
+#include <filesystem>
+#include <memory>
+#include <vector>
+
 #include "gromacs/domdec/domdec_network.h"
+#include "gromacs/domdec/domdec_struct.h"
 #include "gromacs/fileio/gmxfio.h"
 #include "gromacs/fileio/pdbio.h"
 #include "gromacs/math/vec.h"
 #include "gromacs/mdtypes/commrec.h"
+#include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/topology/mtop_lookup.h"
+#include "gromacs/topology/topology_enums.h"
 #include "gromacs/utility/cstringutil.h"
+#include "gromacs/utility/real.h"
 
 #include "domdec_internal.h"
 
@@ -187,13 +198,17 @@ void write_dd_pdb(const char*       fn,
     for (int i = 0; i < natoms; i++)
     {
         int ii = dd->globalAtomIndices[i];
+        if (!isValidGlobalAtom(ii))
+        {
+            continue;
+        }
         mtopGetAtomAndResidueName(mtop, ii, &molb, &atomname, &resnr, &resname, nullptr);
         int  c;
         real b;
         if (i < dd->comm->atomRanges.end(DDAtomRanges::Type::Zones))
         {
             c = 0;
-            while (i >= dd->comm->zones.cg_range[c + 1])
+            while (i >= *dd->zones.atomRange(c).end())
             {
                 c++;
             }
@@ -201,11 +216,11 @@ void write_dd_pdb(const char*       fn,
         }
         else if (i < dd->comm->atomRanges.end(DDAtomRanges::Type::Vsites))
         {
-            b = dd->comm->zones.n;
+            b = dd->zones.numZones();
         }
         else
         {
-            b = dd->comm->zones.n + 1;
+            b = dd->zones.numZones() + 1;
         }
         gmx_fprintf_pdb_atomline(out,
                                  PdbRecordType::Atom,

@@ -36,12 +36,15 @@
 #include "gromacs/utility/physicalnodecommunicator.h"
 
 #include <array>
+#include <string>
 
 #include <gtest/gtest.h>
 
 #include "testutils/mpitest.h"
 
 namespace gmx
+{
+namespace test
 {
 namespace
 {
@@ -58,4 +61,5 @@ TEST(PhysicalNodeCommunicatorTest, CanCallBarrier)
 }
 
 } // namespace
+} // namespace test
 } // namespace gmx

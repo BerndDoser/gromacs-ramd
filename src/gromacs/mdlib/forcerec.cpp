@@ -38,10 +38,14 @@
 #include "config.h"
 
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 
 #include <algorithm>
+#include <array>
+#include <bitset>
+#include <filesystem>
 #include <memory>
 
 #include "gromacs/commandline/filenm.h"
@@ -66,6 +70,7 @@
 #include "gromacs/mdlib/md_support.h"
 #include "gromacs/mdlib/wall.h"
 #include "gromacs/mdlib/wholemoleculetransform.h"
+#include "gromacs/mdtypes/atominfo.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/fcdata.h"
 #include "gromacs/mdtypes/forcerec.h"
@@ -75,25 +80,33 @@
 #include "gromacs/mdtypes/interaction_const.h"
 #include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/mdtypes/multipletimestepping.h"
-#include "gromacs/mdtypes/nblist.h"
 #include "gromacs/mdtypes/simulation_workload.h"
 #include "gromacs/nbnxm/nbnxm.h"
 #include "gromacs/pbcutil/ishift.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/tables/forcetable.h"
+#include "gromacs/topology/atoms.h"
+#include "gromacs/topology/block.h"
+#include "gromacs/topology/forcefieldparameters.h"
 #include "gromacs/topology/idef.h"
+#include "gromacs/topology/ifunc.h"
 #include "gromacs/topology/mtop_util.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/topology/topology_enums.h"
 #include "gromacs/trajectory/trajectoryframe.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/cstringutil.h"
+#include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/listoflists.h"
 #include "gromacs/utility/logger.h"
 #include "gromacs/utility/physicalnodecommunicator.h"
 #include "gromacs/utility/pleasecite.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/strconvert.h"
+#include "gromacs/utility/stringutil.h"
 
 #include "gpuforcereduction.h"
 #include "mdgraph_gpu.h"
@@ -112,38 +125,42 @@ void ForceHelperBuffers::resize(int numAtoms)
     }
 }
 
-std::vector<real> makeNonBondedParameterLists(const int                      numAtomTypes,
+std::vector<real> makeNonBondedParameterLists(const int                      numMtopAtomTypes,
+                                              const bool                     addFillerAtomType,
                                               gmx::ArrayRef<const t_iparams> iparams,
                                               bool                           useBuckinghamPotential)
 {
+    // We add an atom type with index numMtopAtomTypes for filler particles
+    const int numMdrunAtomTypes = numMtopAtomTypes + (addFillerAtomType ? 1 : 0);
+
     std::vector<real> nbfp;
 
     if (useBuckinghamPotential)
     {
-        nbfp.resize(3 * numAtomTypes * numAtomTypes);
+        nbfp.resize(3 * numMdrunAtomTypes * numMdrunAtomTypes, 0.0_real);
         int k = 0;
-        for (int i = 0; (i < numAtomTypes); i++)
+        for (int i = 0; i < numMtopAtomTypes; i++)
         {
-            for (int j = 0; (j < numAtomTypes); j++, k++)
+            for (int j = 0; j < numMtopAtomTypes; j++, k++)
             {
-                BHAMA(nbfp, numAtomTypes, i, j) = iparams[k].bham.a;
-                BHAMB(nbfp, numAtomTypes, i, j) = iparams[k].bham.b;
+                BHAMA(nbfp, numMdrunAtomTypes, i, j) = iparams[k].bham.a;
+                BHAMB(nbfp, numMdrunAtomTypes, i, j) = iparams[k].bham.b;
                 /* nbfp now includes the 6.0 derivative prefactor */
-                BHAMC(nbfp, numAtomTypes, i, j) = iparams[k].bham.c * 6.0;
+                BHAMC(nbfp, numMdrunAtomTypes, i, j) = iparams[k].bham.c * 6.0;
             }
         }
     }
     else
     {
-        nbfp.resize(2 * numAtomTypes * numAtomTypes);
+        nbfp.resize(2 * numMdrunAtomTypes * numMdrunAtomTypes, 0.0_real);
         int k = 0;
-        for (int i = 0; (i < numAtomTypes); i++)
+        for (int i = 0; i < numMtopAtomTypes; i++)
         {
-            for (int j = 0; (j < numAtomTypes); j++, k++)
+            for (int j = 0; j < numMtopAtomTypes; j++, k++)
             {
                 /* nbfp now includes the 6.0/12.0 derivative prefactors */
-                C6(nbfp, numAtomTypes, i, j)  = iparams[k].lj.c6 * 6.0;
-                C12(nbfp, numAtomTypes, i, j) = iparams[k].lj.c12 * 12.0;
+                C6(nbfp, numMdrunAtomTypes, i, j)  = iparams[k].lj.c6 * 6.0;
+                C12(nbfp, numMdrunAtomTypes, i, j) = iparams[k].lj.c12 * 12.0;
             }
         }
     }
@@ -535,7 +552,7 @@ static std::vector<bondedtable_t> make_bonded_tables(FILE*                      
                 // before the file type extension, and avoids table 13
                 // being recognized and used for table 1.
                 std::string patternToFind = gmx::formatString("_%s%d.%s", tabext, i, ftp2ext(efXVG));
-                bool        madeTable     = false;
+                bool madeTable = false;
                 for (gmx::Index j = 0; j < tabbfnm.ssize() && !madeTable; ++j)
                 {
                     if (gmx::endsWith(tabbfnm[j], patternToFind))
@@ -777,8 +794,8 @@ void init_forcerec(FILE*                            fplog,
     }
 
     forcerec->rc_scaling = inputrec.pressureCouplingOptions.refcoord_scaling;
-    copy_rvec(inputrec.posres_com, forcerec->posres_com);
-    copy_rvec(inputrec.posres_comB, forcerec->posres_comB);
+    forcerec->posresCom  = inputrec.posresCom;
+    forcerec->posresComB = inputrec.posresComB;
 
     forcerec->haveBoxDeformation = ir_haveBoxDeformation(inputrec);
 
@@ -900,9 +917,10 @@ void init_forcerec(FILE*                            fplog,
     }
 
     GMX_ASSERT(forcerec->nbfp.empty(), "The nonbonded force parameters should not be set up yet.");
-    forcerec->ntype = mtop.ffparams.atnr;
+    // We add one atom type at the end for filler particles
+    forcerec->ntype = mtop.ffparams.atnr + 1;
     forcerec->nbfp  = makeNonBondedParameterLists(
-            mtop.ffparams.atnr, mtop.ffparams.iparams, forcerec->haveBuckingham);
+            mtop.ffparams.atnr, true, mtop.ffparams.iparams, forcerec->haveBuckingham);
     if (usingLJPme(interactionConst->vdwtype))
     {
         forcerec->ljpme_c6grid = makeLJPmeC6GridCorrectionParameters(

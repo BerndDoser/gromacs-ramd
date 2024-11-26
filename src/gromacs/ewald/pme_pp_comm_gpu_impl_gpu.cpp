@@ -91,10 +91,14 @@ void PmePpCommGpu::Impl::reinit(int size)
     int newSize = size;
     if (useNvshmem_)
     {
+#if GMX_MPI
         MPI_Allreduce(&size, &newSize, 1, MPI_INT, MPI_MAX, comm_);
+#endif
 
         int numPpRanks = 0;
+#if GMX_MPI
         MPI_Bcast(&numPpRanks, 1, MPI_INT, pmeRank_, comm_);
+#endif
         // symmetric buffer used for synchronization purpose 1 to be used to signal PME to PP rank
         // of put, and numPpRanks is intended to be used for each PP rank buffer consumption
         // completion signal to PME to allow to produce it again. this a collective call.
@@ -229,10 +233,15 @@ void PmePpCommGpu::Impl::receiveForceFromPme(Float3* recvPtr, int recvSize, bool
 }
 
 // NOLINTNEXTLINE readability-convert-member-functions-to-static
-void PmePpCommGpu::Impl::sendCoordinatesToPmeGpuAwareMpi(Float3*               sendPtr,
-                                                         int                   sendSize,
+void PmePpCommGpu::Impl::sendCoordinatesToPmeGpuAwareMpi(Float3* sendPtr,
+                                                         int     sendSize,
                                                          GpuEventSynchronizer* coordinatesReadyOnDeviceEvent)
 {
+    if (sendSize == 0)
+    {
+        return;
+    }
+
     // ensure coordinate data is available on device before we start transfer
     if (coordinatesReadyOnDeviceEvent)
     {

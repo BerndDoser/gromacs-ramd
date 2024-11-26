@@ -43,9 +43,11 @@
 
 #include <cstdio>
 
+#include "gromacs/math/vectypes.h"
 #include "gromacs/topology/ifunc.h"
 #include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/gmxmpi.h"
+#include "gromacs/utility/real.h"
 
 struct gmx_mtop_t;
 struct gmx_multisim_t;
@@ -59,6 +61,7 @@ struct t_pbc;
 class t_state;
 enum class DDRole;
 enum class NumRanks;
+union t_iparams;
 
 namespace gmx
 {
@@ -119,10 +122,10 @@ real ta_disres(int                       nfa,
                real                      lambda,
                real*                     dvdlambda,
                gmx::ArrayRef<const real> charge,
-               t_fcdata gmx_unused* fcd,
-               t_disresdata*        disresdata,
-               t_oriresdata gmx_unused* oriresdata,
-               int*                     global_atom_index);
+               t_fcdata gmx_unused*      fcd,
+               t_disresdata*             disresdata,
+               t_oriresdata gmx_unused*  oriresdata,
+               int*                      global_atom_index);
 
 //! Copies the new time averages that have been calculated in calc_disres_R_6.
 void update_disres_history(const t_disresdata& disresdata, history_t* hist);

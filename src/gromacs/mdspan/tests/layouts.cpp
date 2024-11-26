@@ -42,11 +42,20 @@
 
 #include "gromacs/mdspan/layouts.h"
 
+#include <cstddef>
+
+#include <array>
+#include <string>
+
 #include <gtest/gtest.h>
 
 #include "gromacs/mdspan/extents.h"
 
 namespace gmx
+{
+namespace test
+{
+namespace
 {
 
 template<class Layout, ptrdiff_t... E_STATIC>
@@ -157,4 +166,6 @@ TEST(LayoutTests, LayoutRightOperator)
     test.check_operator(0, 0, 0, 0, 0, 0);
 }
 
+} // namespace
+} // namespace test
 } // namespace gmx

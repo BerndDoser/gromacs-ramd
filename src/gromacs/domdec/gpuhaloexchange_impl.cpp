@@ -46,10 +46,23 @@
 
 #include "config.h"
 
+#include <memory>
 #include <utility>
 
 #include "gromacs/domdec/gpuhaloexchange.h"
+#include "gromacs/gpu_utils/devicebuffer_datatype.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/utility/gmxassert.h"
+
+class DeviceContext;
+class GpuEventSynchronizer;
+namespace gmx
+{
+template<typename T, size_t capacity_>
+class FixedCapacityVector;
+} // namespace gmx
+struct gmx_domdec_t;
+struct gmx_wallcycle;
 
 #if !GMX_GPU_CUDA && !GMX_GPU_SYCL
 
@@ -65,8 +78,10 @@ class GpuHaloExchange::Impl
 GpuHaloExchange::GpuHaloExchange(gmx_domdec_t* /* dd */,
                                  int /* dimIndex */,
                                  MPI_Comm /* mpi_comm_mysim */,
+                                 MPI_Comm /* mpi_comm_mysim_world */,
                                  const DeviceContext& /* deviceContext */,
                                  int /*pulse */,
+                                 bool /*useNvshmem*/,
                                  gmx_wallcycle* /*wcycle*/) :
     impl_(nullptr)
 {
@@ -87,6 +102,12 @@ GpuHaloExchange& GpuHaloExchange::operator=(GpuHaloExchange&& other) noexcept
 /*!\brief init halo exhange stub. */
 void GpuHaloExchange::reinitHalo(DeviceBuffer<RVec> /* d_coordinatesBuffer */,
                                  DeviceBuffer<RVec> /* d_forcesBuffer */)
+{
+    GMX_ASSERT(!impl_,
+               "A CPU stub for GPU Halo Exchange was called insted of the correct implementation.");
+}
+
+void GpuHaloExchange::reinitNvshmemSignal(const t_commrec& /* cr */, int /* signalObjOffset */)
 {
     GMX_ASSERT(!impl_,
                "A CPU stub for GPU Halo Exchange was called insted of the correct implementation.");
@@ -116,6 +137,12 @@ GpuEventSynchronizer* GpuHaloExchange::getForcesReadyOnDeviceEvent()
     GMX_ASSERT(!impl_,
                "A CPU stub for GPU Halo Exchange was called insted of the correct implementation.");
     return nullptr;
+}
+
+void GpuHaloExchange::destroyGpuHaloExchangeNvshmemBuf()
+{
+    GMX_ASSERT(!impl_,
+               "A CPU stub for GPU Halo Exchange was called insted of the correct implementation.");
 }
 
 } // namespace gmx

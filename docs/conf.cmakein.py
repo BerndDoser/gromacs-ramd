@@ -69,8 +69,13 @@ variables = [
     ("EXPECTED_DOXYGEN_VERSION", "@EXPECTED_DOXYGEN_VERSION@"),
     ("EXPECTED_SPHINX_VERSION", "@EXPECTED_SPHINX_VERSION@"),
     ("CMAKE_MINIMUM_REQUIRED_VERSION", "@CMAKE_MINIMUM_REQUIRED_VERSION@"),
-    ("REQUIRED_CUDA_VERSION", "@REQUIRED_CUDA_VERSION@"),
-    ("REQUIRED_CUDA_COMPUTE_CAPABILITY", "@REQUIRED_CUDA_COMPUTE_CAPABILITY@"),
+    ("GMX_CLANG_MINIMUM_REQUIRED_VERSION", "@GMX_CLANG_MINIMUM_REQUIRED_VERSION@"),
+    ("GMX_GCC_MINIMUM_REQUIRED_VERSION", "@GMX_GCC_MINIMUM_REQUIRED_VERSION@"),
+    ("GMX_CUDA_MINIMUM_REQUIRED_VERSION", "@GMX_CUDA_MINIMUM_REQUIRED_VERSION@"),
+    (
+        "GMX_CUDA_MINIMUM_REQUIRED_COMPUTE_CAPABILITY",
+        "@GMX_CUDA_MINIMUM_REQUIRED_COMPUTE_CAPABILITY@",
+    ),
     ("REQUIRED_OPENCL_MIN_VERSION", "@REQUIRED_OPENCL_MIN_VERSION@"),
     ("SOURCE_MD5SUM", "@SOURCE_MD5SUM@"),
     ("REGRESSIONTEST_MD5SUM", "@REGRESSIONTEST_MD5SUM_STRING@"),
@@ -247,6 +252,8 @@ rst_epilog += """
 .. _Intel oneAPI DPC++: https://www.intel.com/content/www/us/en/developer/tools/oneapi/dpc-compiler.html
 .. _hipSYCL: https://github.com/AdaptiveCpp/AdaptiveCpp
 .. _AdaptiveCpp: https://github.com/AdaptiveCpp/AdaptiveCpp
+.. _ROCm: https://rocm.docs.amd.com/en/latest/index.html
+.. _rocPrim: https://rocm.docs.amd.com/projects/rocPRIM/en/latest/index.html
 .. _OpenMPI: http://www.open-mpi.org
 .. _MPICH: http://www.mpich.org
 .. _OpenMP: http://en.wikipedia.org/wiki/OpenMP
@@ -262,7 +269,8 @@ rst_epilog += """
 .. _PyMOL: http://www.pymol.org
 .. _webpage: http://www.gromacs.org
 .. _ftp site: ftp://ftp.gromacs.org/gromacs/
-.. _tutorials: http://www.mdtutorials.com/gmx/
+.. _third-party-tutorials: http://www.mdtutorials.com/gmx/
+.. _tutorials: https://tutorials.gromacs.org/
 .. _issue tracker: https://gitlab.com/gromacs/gromacs/-/issues/
 .. _gitlab: https://gitlab.com/gromacs/gromacs/
 .. _download: ../download.html

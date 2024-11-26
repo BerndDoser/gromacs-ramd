@@ -45,16 +45,27 @@
 #include "config.h"
 
 #include <cassert>
+#include <cinttypes>
+#include <climits>
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 
 #include <algorithm>
+#include <array>
+#include <filesystem>
+#include <functional>
+#include <memory>
 #include <optional>
+#include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "gromacs/domdec/domdec.h"
 #include "gromacs/domdec/domdec_struct.h"
 #include "gromacs/gmxlib/nrnb.h"
+#include "gromacs/math/arrayrefwithpadding.h"
 #include "gromacs/math/functions.h"
 #include "gromacs/math/paddedvector.h"
 #include "gromacs/math/units.h"
@@ -72,6 +83,8 @@
 #include "gromacs/simd/simd_math.h"
 #include "gromacs/simd/vector_operations.h"
 #include "gromacs/timing/wallcycle.h"
+#include "gromacs/topology/idef.h"
+#include "gromacs/topology/ifunc.h"
 #include "gromacs/topology/mtop_util.h"
 #include "gromacs/topology/topology.h"
 #include "gromacs/utility/alignedallocator.h"
@@ -84,6 +97,7 @@
 #include "gromacs/utility/gmxomp.h"
 #include "gromacs/utility/listoflists.h"
 #include "gromacs/utility/pleasecite.h"
+#include "gromacs/utility/stringutil.h"
 
 namespace
 {
@@ -1394,7 +1408,8 @@ static void set_lincs_matrix(Lincs* li, ArrayRef<const real> invmass, real lambd
 
     /* Construct the coupling coefficient matrix blmf */
     int ntriangle = 0, ncc_triangle = 0, nCrossTaskTriangles = 0;
-#pragma omp parallel for reduction(+: ntriangle, ncc_triangle, nCrossTaskTriangles) num_threads(li->ntask) schedule(static)
+#pragma omp parallel for reduction(+ : ntriangle, ncc_triangle, nCrossTaskTriangles) \
+        num_threads(li->ntask) schedule(static)
     for (int th = 0; th < li->ntask; th++)
     {
         try
@@ -1426,8 +1441,7 @@ static void set_lincs_matrix(Lincs* li, ArrayRef<const real> invmass, real lambd
     li->matlam = lambda;
 }
 
-//! Finds all triangles of atoms that share constraints to a central atom.
-static int count_triangle_constraints(const InteractionLists& ilist, const ListOfLists<int>& at2con)
+int count_triangle_constraints(const InteractionLists& ilist, const ListOfLists<int>& at2con)
 {
     const int ncon1    = ilist[F_CONSTR].size() / 3;
     const int ncon_tot = ncon1 + ilist[F_CONSTRNC].size() / 3;
@@ -1625,13 +1639,15 @@ Lincs* init_lincs(FILE*                            fplog,
     if (observablesReducerBuilder)
     {
         ObservablesReducerBuilder::CallbackFromBuilder callbackFromBuilder =
-                [li](ObservablesReducerBuilder::CallbackToRequireReduction c, gmx::ArrayRef<double> v) {
-                    li->callbackToRequireReduction = std::move(c);
-                    li->rmsdReductionBuffer        = v;
-                };
+                [li](ObservablesReducerBuilder::CallbackToRequireReduction c, gmx::ArrayRef<double> v)
+        {
+            li->callbackToRequireReduction = std::move(c);
+            li->rmsdReductionBuffer        = v;
+        };
 
         // Make the callback that runs afer reduction.
-        ObservablesReducerBuilder::CallbackAfterReduction callbackAfterReduction = [li](gmx::Step /*step*/) {
+        ObservablesReducerBuilder::CallbackAfterReduction callbackAfterReduction = [li](gmx::Step /*step*/)
+        {
             if (li->rmsdReductionBuffer[0] > 0)
             {
                 li->constraintRmsDeviation =

@@ -40,7 +40,6 @@
  *  TODO: the intent is for DeviceBuffer to become a class.
  *
  *  \author Paul Bauer <paul.bauer.q@gmail.com>
- *  \author Julio Maia <julio.maia@amd.com>
  *
  *  \inlibraryapi
  */
@@ -318,14 +317,16 @@ using DeviceTexture = hipTextureObject_t;
  * \param[out]  deviceBuffer   Device buffer to store data in.
  * \param[in]   hostBuffer     Host buffer to get date from
  * \param[in]   numValues      Number of elements in the buffer.
- * \param[in]   deviceContext  GPU device context.
+ * \param[in]   deviceContext  Device context for memory allocation.
+ * \param[in]   deviceStream   Device stream for initialization.
  */
 template<typename ValueType>
 void initParamLookupTable(DeviceBuffer<ValueType>* deviceBuffer,
                           DeviceTexture* /* deviceTexture */,
                           const ValueType*     hostBuffer,
                           int                  numValues,
-                          const DeviceContext& deviceContext)
+                          const DeviceContext& deviceContext,
+                          const DeviceStream&  deviceStream)
 {
     if (numValues == 0)
     {
@@ -335,13 +336,8 @@ void initParamLookupTable(DeviceBuffer<ValueType>* deviceBuffer,
 
     allocateDeviceBuffer<ValueType>(deviceBuffer, numValues, deviceContext);
 
-    const size_t sizeInBytes = numValues * sizeof(ValueType);
-
-    hipError_t stat = hipMemcpy(
-            *reinterpret_cast<ValueType**>(deviceBuffer), hostBuffer, sizeInBytes, hipMemcpyHostToDevice);
-
-    GMX_RELEASE_ASSERT(stat == hipSuccess,
-                       ("Synchronous H2D copy failed. " + gmx::getDeviceErrorString(stat)).c_str());
+    copyToDeviceBuffer(
+            deviceBuffer, hostBuffer, 0, numValues, deviceStream, GpuApiCallBehavior::Sync, nullptr);
 }
 
 /*! \brief Unbind the texture and release the HIP texture object.
@@ -351,8 +347,7 @@ void initParamLookupTable(DeviceBuffer<ValueType>* deviceBuffer,
  * \param[in,out]  deviceBuffer   Device buffer to store data in.
  */
 template<typename ValueType>
-void destroyParamLookupTable(DeviceBuffer<ValueType>* deviceBuffer,
-                             const DeviceTexture* /* deviceTexture */)
+void destroyParamLookupTable(DeviceBuffer<ValueType>* deviceBuffer, const DeviceTexture* /* deviceTexture */)
 {
     freeDeviceBuffer(deviceBuffer);
 }

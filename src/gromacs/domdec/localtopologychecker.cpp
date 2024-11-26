@@ -45,11 +45,16 @@
 
 #include "gromacs/domdec/localtopologychecker.h"
 
+#include <array>
+#include <filesystem>
+#include <functional>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "gromacs/domdec/domdec_internal.h"
+#include "gromacs/domdec/domdec_struct.h"
 #include "gromacs/domdec/options.h"
 #include "gromacs/domdec/reversetopology.h"
 #include "gromacs/gmxlib/network.h"
@@ -62,8 +67,11 @@
 #include "gromacs/topology/topology.h"
 #include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/fatalerror.h"
+#include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/logger.h"
+#include "gromacs/utility/range.h"
 #include "gromacs/utility/stringstream.h"
+#include "gromacs/utility/stringutil.h"
 #include "gromacs/utility/textwriter.h"
 
 #include "dump.h"
@@ -106,8 +114,8 @@ static void flagInteractionsForType(const int              ftype,
             const int moleculeIndex = (a0 - atomRange.begin()) / numAtomsPerMolecule;
             const int atomOffset = (a0 - atomRange.begin()) - moleculeIndex * numAtomsPerMolecule;
             const int globalAtomStartInMolecule = atomRange.begin() + moleculeIndex * numAtomsPerMolecule;
-            int       j_mol                     = ril.index[atomOffset];
-            bool found                          = false;
+            int  j_mol = ril.index[atomOffset];
+            bool found = false;
             while (j_mol < ril.index[atomOffset + 1] && !found)
             {
                 const int j       = moleculeIndex * nril_mol + j_mol;
@@ -326,7 +334,10 @@ static void printMissingInteractionsAtoms(const MDLogger&               mdlog,
     }
 
     printMissingInteractionsAtoms(mdlog, cr, top_global, top_local.idef);
-    write_dd_pdb("dd_dump_err", 0, "dump", top_global, cr, -1, as_rvec_array(x.data()), box);
+    if (!x.empty())
+    {
+        write_dd_pdb("dd_dump_err", 0, "dump", top_global, cr, -1, as_rvec_array(x.data()), box);
+    }
 
     std::string errorMessage;
 
@@ -369,7 +380,7 @@ public:
          const gmx_mtop_t&     mtop,
          DDBondedChecking      ddBondedChecking,
          const gmx_localtop_t& localTopology,
-         const t_state&        localState,
+         const t_state*        localState,
          bool                  useUpdateGroups);
     //! Objects used when reporting that interactions are missing
     //! {
@@ -381,8 +392,8 @@ public:
     const gmx_mtop_t& mtop_;
     //! Local topology
     const gmx_localtop_t& localTopology_;
-    //! Local state
-    const t_state& localState_;
+    //! Local state, optional
+    const t_state* localState_;
     //! }
 
     /*! \brief View used for computing the global number of bonded interactions.
@@ -404,7 +415,7 @@ public:
 /*! \brief Compute the total bonded interaction count
  *
  * \param[in] mtop              The global system topology
- * \param[in] ddBondedChecking  Which interations to check
+ * \param[in] ddBondedChecking  Which interactions to check
  * \param[in] useUpdateGroups   Whether update groups are in use
  *
  * When using domain decomposition without update groups,
@@ -433,7 +444,7 @@ LocalTopologyChecker::Impl::Impl(const MDLogger&        mdlog,
                                  const gmx_mtop_t&      mtop,
                                  const DDBondedChecking ddBondedChecking,
                                  const gmx_localtop_t&  localTopology,
-                                 const t_state&         localState,
+                                 const t_state*         localState,
                                  bool                   useUpdateGroups) :
     mdlog_(mdlog),
     cr_(cr),
@@ -450,33 +461,36 @@ LocalTopologyChecker::LocalTopologyChecker(const MDLogger&            mdlog,
                                            const gmx_mtop_t&          mtop,
                                            const DDBondedChecking     ddBondedChecking,
                                            const gmx_localtop_t&      localTopology,
-                                           const t_state&             localState,
+                                           const t_state*             localState,
                                            const bool                 useUpdateGroups,
                                            ObservablesReducerBuilder* observablesReducerBuilder) :
     impl_(std::make_unique<Impl>(mdlog, cr, mtop, ddBondedChecking, localTopology, localState, useUpdateGroups))
 {
     Impl*                                          impl = impl_.get();
     ObservablesReducerBuilder::CallbackFromBuilder callbackFromBuilder =
-            [impl](ObservablesReducerBuilder::CallbackToRequireReduction c, gmx::ArrayRef<double> v) {
-                impl->callbackToRequireReduction_ = std::move(c);
-                impl->reductionBuffer_            = v;
-            };
+            [impl](ObservablesReducerBuilder::CallbackToRequireReduction c, gmx::ArrayRef<double> v)
+    {
+        impl->callbackToRequireReduction_ = std::move(c);
+        impl->reductionBuffer_            = v;
+    };
 
     // Make the callback that runs afer reduction.
-    ObservablesReducerBuilder::CallbackAfterReduction callbackAfterReduction = [impl](gmx::Step /*step*/) {
+    ObservablesReducerBuilder::CallbackAfterReduction callbackAfterReduction = [impl](gmx::Step /*step*/)
+    {
         // Get the total after reduction
         int numTotalBondedInteractionsFound = impl->reductionBuffer_[0];
         if (numTotalBondedInteractionsFound != impl->expectedNumGlobalBondedInteractions_)
         {
             // Give error and exit
-            dd_print_missing_interactions(impl->mdlog_,
-                                          impl->cr_,
-                                          numTotalBondedInteractionsFound,
-                                          impl->expectedNumGlobalBondedInteractions_,
-                                          impl->mtop_,
-                                          impl->localTopology_,
-                                          impl->localState_.x,
-                                          impl->localState_.box); // Does not return
+            dd_print_missing_interactions(
+                    impl->mdlog_,
+                    impl->cr_,
+                    numTotalBondedInteractionsFound,
+                    impl->expectedNumGlobalBondedInteractions_,
+                    impl->mtop_,
+                    impl->localTopology_,
+                    impl->localState_ ? makeArrayRef(impl->localState_->x) : ArrayRef<RVec>(),
+                    impl->localState_ ? impl->localState_->box : nullptr); // Does not return
         }
     };
 

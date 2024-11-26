@@ -40,28 +40,39 @@
 #include <cstring>
 
 #include <algorithm>
+#include <filesystem>
 #include <numeric>
 #include <string>
+#include <type_traits>
+#include <vector>
 
+#include "gromacs/commandline/filenm.h"
 #include "gromacs/commandline/pargs.h"
 #include "gromacs/commandline/viewit.h"
+#include "gromacs/fileio/filetypes.h"
 #include "gromacs/fileio/matio.h"
 #include "gromacs/fileio/readinp.h"
+#include "gromacs/fileio/rgb.h"
 #include "gromacs/fileio/trxio.h"
 #include "gromacs/fileio/warninp.h"
 #include "gromacs/fileio/writeps.h"
 #include "gromacs/gmxana/gmx_ana.h"
 #include "gromacs/math/functions.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/arraysize.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/filestream.h"
 #include "gromacs/utility/futil.h"
 #include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/stringutil.h"
+
+struct gmx_output_env_t;
 
 #define FUDGE 1.2
 #define DDD 2
@@ -1502,28 +1513,28 @@ int gmx_xpm2ps(int argc, char* argv[])
         { "-diag", FALSE, etENUM, { diag }, "Diagonal" },
         { "-size", FALSE, etREAL, { &size }, "Horizontal size of the matrix in ps units" },
         { "-bx",
-          FALSE,
-          etREAL,
-          { &boxx },
-          "Element x-size, overrides [TT]-size[tt] (also y-size when [TT]-by[tt] is not set)" },
+              FALSE,
+              etREAL,
+              { &boxx },
+              "Element x-size, overrides [TT]-size[tt] (also y-size when [TT]-by[tt] is not set)" },
         { "-by", FALSE, etREAL, { &boxy }, "Element y-size" },
         { "-rainbow", FALSE, etENUM, { rainbow }, "Rainbow colors, convert white to" },
         { "-gradient",
-          FALSE,
-          etRVEC,
-          { grad },
-          "Re-scale colormap to a smooth gradient from white {1,1,1} to {r,g,b}" },
+              FALSE,
+              etRVEC,
+              { grad },
+              "Re-scale colormap to a smooth gradient from white {1,1,1} to {r,g,b}" },
         { "-skip", FALSE, etINT, { &skip }, "only write out every nr-th row and column" },
         { "-zeroline",
-          FALSE,
-          etBOOL,
-          { &bZeroLine },
-          "insert line in [REF].xpm[ref] matrix where axis label is zero" },
+              FALSE,
+              etBOOL,
+              { &bZeroLine },
+              "insert line in [REF].xpm[ref] matrix where axis label is zero" },
         { "-legoffset",
-          FALSE,
-          etINT,
-          { &mapoffset },
-          "Skip first N colors from [REF].xpm[ref] file for the legend" },
+              FALSE,
+              etINT,
+              { &mapoffset },
+              "Skip first N colors from [REF].xpm[ref] file for the legend" },
         { "-combine", FALSE, etENUM, { combine }, "Combine two matrices" },
         { "-cmin", FALSE, etREAL, { &cmin }, "Minimum for combination output" },
         { "-cmax", FALSE, etREAL, { &cmax }, "Maximum for combination output" }

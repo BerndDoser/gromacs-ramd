@@ -57,6 +57,8 @@
 #ifndef GMX_DOMDEC_DOMDEC_H
 #define GMX_DOMDEC_DOMDEC_H
 
+#include <cstddef>
+
 #include <vector>
 
 #include "gromacs/gpu_utils/devicebuffer_datatype.h"
@@ -83,6 +85,7 @@ namespace gmx
 {
 struct AtomInfoWithinMoleculeBlock;
 class DeviceStreamManager;
+class DomdecZones;
 class ForceWithShiftForces;
 class MDLogger;
 class RangePartitioning;
@@ -92,6 +95,9 @@ class ArrayRef;
 template<typename, size_t>
 class FixedCapacityVector;
 } // namespace gmx
+
+//! Returns the MPI rank for the PP domain corresponding to \p coord
+int ddRankFromDDCoord(const gmx_domdec_t& dd, const gmx::IVec& coord);
 
 /*! \brief Returns the global topology atom number belonging to local atom index i.
  *
@@ -107,8 +113,8 @@ int ddglatnr(const gmx_domdec_t* dd, int i);
  */
 void dd_store_state(const gmx_domdec_t& dd, t_state* state);
 
-/*! \brief Returns a pointer to the gmx_domdec_zones_t struct */
-struct gmx_domdec_zones_t* domdec_zones(struct gmx_domdec_t* dd);
+/*! \brief Returns a const reference to the gmx::DomdecZones object */
+const gmx::DomdecZones& getDomdecZones(const gmx_domdec_t& dd);
 
 /*! \brief Returns the range for atoms in zones*/
 int dd_numAtomsZones(const gmx_domdec_t& dd);
@@ -171,14 +177,30 @@ bool change_dd_cutoff(t_commrec*                     cr,
                       real                           cutoffRequested,
                       bool                           checkGpuDdLimitation);
 
-/*! \brief Set up communication for averaging GPU wait times over domains
+/*! \brief Set up communication between PP ranks for averaging GPU
+ * wait times over domains.
  *
  * When domains (PP MPI ranks) share a GPU, the individual GPU wait times
  * are meaningless, as it depends on the order in which tasks on the same
  * GPU finish. Therefore there wait times need to be averaged over the ranks
  * sharing the same GPU. This function sets up the communication for that.
+ *
+ * When there is no PP work on this rank or only one rank, no sharing
+ * is set up. It's the caller's responsibility to call this method on
+ * a PP rank only when that rank is using a GPU.
+ *
+ * It is not necessary that \c uniqueDeviceId is globally unique, merely
+ * that its value will be the same on each
+ * rank when a device is shared between ranks, and otherwise
+ * different. An index into the array of devices visible to all ranks
+ * of the same node is sufficient if all such ranks see all devices.
+ * However, that index is unreliable when ranks on the same node see
+ * different subsets of the devices on the node because of different
+ * local environments. In the case where each rank sees only one
+ * device, DLB will behave as if all ranks on the node share the same
+ * device, which will not be optimal.
  */
-void dd_setup_dlb_resource_sharing(const t_commrec* cr, int gpu_id);
+void dd_setup_dlb_resource_sharing(const t_commrec* cr, int uniqueDeviceId);
 
 /*! \brief Cycle counter indices used internally in the domain decomposition */
 enum
@@ -263,6 +285,10 @@ void reinitGpuHaloExchange(const t_commrec&        cr,
                            DeviceBuffer<gmx::RVec> d_coordinatesBuffer,
                            DeviceBuffer<gmx::RVec> d_forcesBuffer);
 
+/*! \brief Destructor for symmetric d_recvBuf used by NVSHMEM.
+ * \param [in] cr                The commrec object
+ */
+void destroyGpuHaloExchangeNvshmemBuf(const t_commrec& cr);
 
 /*! \brief GPU halo exchange of coordinates buffer.
  * \param [in] cr                The commrec object

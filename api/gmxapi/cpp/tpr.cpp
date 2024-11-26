@@ -42,10 +42,14 @@
 #include "gmxapi/compat/tpr.h"
 
 #include <cassert>
+#include <cmath>
+#include <cstdint>
 
+#include <filesystem>
 #include <map>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "gromacs/fileio/oenv.h"
@@ -56,10 +60,13 @@
 #include "gromacs/topology/topology.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/programcontext.h"
+#include "gromacs/utility/real.h"
 
 #include "gmxapi/compat/mdparams.h"
 #include "gmxapi/gmxapi.h"
 #include "gmxapi/gmxapicompat.h"
+
+struct gmx_output_env_t;
 
 using gmxapi::GmxapiType;
 
@@ -76,8 +83,8 @@ public:
     {
         read_tpx_state(infile, irInstance_.get(), state_.get(), mtop_.get());
     }
-    ~TprContents()                             = default;
-    TprContents(TprContents&& source) noexcept = default;
+    ~TprContents()                                 = default;
+    TprContents(TprContents&& source) noexcept     = default;
     TprContents& operator=(TprContents&&) noexcept = default;
 
     /*!

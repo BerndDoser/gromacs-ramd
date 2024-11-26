@@ -34,14 +34,20 @@
 #include "gmxpre.h"
 
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
 #include <algorithm>
+#include <filesystem>
 #include <optional>
+#include <string>
+#include <vector>
 
+#include "gromacs/commandline/filenm.h"
 #include "gromacs/commandline/pargs.h"
 #include "gromacs/commandline/viewit.h"
 #include "gromacs/fileio/confio.h"
+#include "gromacs/fileio/filetypes.h"
 #include "gromacs/fileio/trxio.h"
 #include "gromacs/fileio/xvgr.h"
 #include "gromacs/gmxana/cmat.h"
@@ -51,17 +57,26 @@
 #include "gromacs/math/units.h"
 #include "gromacs/math/utilities.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/pbcutil/rmpbc.h"
+#include "gromacs/topology/atoms.h"
 #include "gromacs/topology/index.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/topology/topology_enums.h"
 #include "gromacs/trajectory/trajectoryframe.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/arraysize.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/futil.h"
 #include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
+
+enum class PbcType : int;
+struct gmx_output_env_t;
 
 /****************************************************************************/
 /* This program calculates the order parameter per atom for an interface or */
@@ -962,26 +977,26 @@ int gmx_order(int argc, char* argv[])
     t_pargs            pa[]          = {
         { "-d", FALSE, etENUM, { normal_axis }, "Direction of the normal on the membrane" },
         { "-sl",
-          FALSE,
-          etINT,
-          { &nslices },
-          "Calculate order parameter as function of box length, dividing the box"
-          " into this number of slices." },
+                              FALSE,
+                              etINT,
+                              { &nslices },
+                              "Calculate order parameter as function of box length, dividing the box"
+                                                  " into this number of slices." },
         { "-szonly",
-          FALSE,
-          etBOOL,
-          { &bSzonly },
-          "Only give Sz element of order tensor. (axis can be specified with [TT]-d[tt])" },
+                              FALSE,
+                              etBOOL,
+                              { &bSzonly },
+                              "Only give Sz element of order tensor. (axis can be specified with [TT]-d[tt])" },
         { "-unsat",
-          FALSE,
-          etBOOL,
-          { &bUnsatRemoved },
-          "HIDDENThis option has been removed as it didn't ever properly work." },
+                              FALSE,
+                              etBOOL,
+                              { &bUnsatRemoved },
+                              "HIDDENThis option has been removed as it didn't ever properly work." },
         { "-permolecule",
-          FALSE,
-          etBOOL,
-          { &permolecule },
-          "Compute per-molecule Scd order parameters" },
+                              FALSE,
+                              etBOOL,
+                              { &permolecule },
+                              "Compute per-molecule Scd order parameters" },
         { "-radial", FALSE, etBOOL, { &radial }, "Compute a radial membrane normal" },
         { "-calcdist", FALSE, etBOOL, { &distcalc }, "Compute distance from a reference" },
     };

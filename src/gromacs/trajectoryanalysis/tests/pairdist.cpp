@@ -52,7 +52,11 @@
 
 #include "gromacs/trajectoryanalysis/modules/pairdist.h"
 
+#include <string>
+
 #include <gtest/gtest.h>
+
+#include "gromacs/utility/arrayref.h"
 
 #include "testutils/cmdlinetest.h"
 #include "testutils/testasserts.h"
@@ -60,6 +64,10 @@
 
 #include "moduletest.h"
 
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
@@ -170,3 +178,5 @@ TEST_F(PairDistanceModuleTest, CoordinateSelectionIsNotOverwrittenWithExplicitGr
 }
 
 } // namespace
+} // namespace test
+} // namespace gmx

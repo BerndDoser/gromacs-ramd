@@ -42,11 +42,16 @@
 
 #include "gromacs/mdrunutility/mdmodulesnotifier.h"
 
+#include <functional>
+#include <string>
+
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
 namespace gmx
 {
-
+namespace test
+{
 namespace
 {
 
@@ -173,5 +178,5 @@ TEST(MDModulesNotifierTest, AddConsumerOfTwoResources)
 
 
 } // namespace
-
+} // namespace test
 } // namespace gmx

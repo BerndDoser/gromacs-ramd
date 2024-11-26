@@ -34,9 +34,16 @@
 #ifndef GMX_MDLIB_FORCEREC_H
 #define GMX_MDLIB_FORCEREC_H
 
+#include <cstdio>
+
+#include <string>
+#include <vector>
+
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/timing/wallcycle.h"
 #include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/real.h"
 
 struct gmx_hw_info_t;
 struct t_commrec;
@@ -60,10 +67,12 @@ class SimulationWorkload;
 /*! \brief Create nonbonded parameter lists
  *
  * \param[in] numAtomTypes           The number of atom types
+ * \param[in] addFillerAtomType      Whether to add an atom type, at the end, for filler particles
  * \param[in] iparams                The LJ parameters
  * \param[in] useBuckinghamPotential Use Buckingham potential
  */
 std::vector<real> makeNonBondedParameterLists(int                            numAtomTypes,
+                                              bool                           addFillerAtomType,
                                               gmx::ArrayRef<const t_iparams> iparams,
                                               bool useBuckinghamPotential);
 

@@ -41,14 +41,23 @@
 
 #include "config.h"
 
+#include <string>
+
+#include <gtest/gtest.h>
+
 #include "gromacs/gmxana/gmx_ana.h"
 
 #include "testutils/cmdlinetest.h"
 #include "testutils/simulationdatabase.h"
 #include "testutils/stdiohelper.h"
+#include "testutils/testasserts.h"
 #include "testutils/textblockmatchers.h"
 #include "testutils/xvgtest.h"
 
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
@@ -103,3 +112,5 @@ const char* const trajectoryFileNames[] = { "spc2-traj.trr", "spc2-traj.xtc", "s
 INSTANTIATE_TEST_SUITE_P(NoFatalErrorWhenWritingFrom, GmxTraj, ::testing::ValuesIn(trajectoryFileNames));
 
 } // namespace
+} // namespace test
+} // namespace gmx

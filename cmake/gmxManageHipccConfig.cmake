@@ -48,12 +48,16 @@
 #
 # As this code is not yet tested on Windows, it always accepts the
 # flags in that case.
+#
+# To avoid triggering device autodetection on systems that have no
+# device present, we always add one architecture to the compilation
+# arguments.
 function(gmx_add_hipcc_flag_if_supported _output_variable_name_to_append_to _flags_cache_variable_name)
     # If the check has already been run, do not re-run it
     if (NOT DEFINED ${_flags_cache_variable_name} AND NOT WIN32)
         message(STATUS "Checking if hipcc accepts flags ${ARGN}")
         execute_process(
-                COMMAND ${HIP_HIPCC_EXECUTABLE} ${ARGN} -Werror --genco "${CMAKE_SOURCE_DIR}/cmake/TestHIP.cpp"
+                COMMAND ${HIP_HIPCC_EXECUTABLE} ${ARGN} --offload-arch=gfx90a -Werror --genco "${CMAKE_SOURCE_DIR}/cmake/TestHIP.cpp"
             RESULT_VARIABLE _hip_success
             OUTPUT_QUIET
             ERROR_QUIET
@@ -100,6 +104,7 @@ function(gmx_check_hip_architectures _target_architectures)
     endif()
     set(GMX_HIP_HIPCC_FLAGS ${GMX_HIP_HIPCC_FLAGS} PARENT_SCOPE)
     set(CMAKE_HIP_ARCHITECTURES ${_all_accepted_architectures} PARENT_SCOPE)
+    set(AMDGPU_TARGETS ${_all_accepted_architectures} PARENT_SCOPE)
 endfunction()
 
 # iterate over user supplied and GROMACS default list of optimization flags
@@ -114,11 +119,29 @@ endfunction()
 
 # List of compilation flags used to control device and host code compilation. The functions used below and defined above all append to this list.
 set(GMX_HIP_HIPCC_FLAGS)
-# If the users doesn't limit the architectures to generate code for, use an exhaustive list of possible targets, taken from compiler reference
+# If the users doesn't limit the architectures to generate code for, we use a list of CDNA targets to build for by default.
 # https://github.com/ROCm/ROCR-Runtime/blob/rocm-5.7.x/src/core/runtime/isa.cpp and https://rocm.docs.amd.com/_/downloads/HIP/en/latest/pdf/
-set(GMX_HIP_TARGET_ARCH "gfx801,gfx802,gfx803,gfx900,gfx906,gfx90a,gfx90c,gfx940,gfx941,gfx942,gfx1010,gfx1011,gfx1012,gfx1030,gfx1031,gfx1034,gfx1100" CACHE STRING "Comma-separated list of target architectures to generate device code")
+set(GMX_HIP_TARGET_ARCH "gfx801,gfx802,gfx803,gfx900,gfx906,gfx90a,gfx90c,gfx942" CACHE STRING "Comma-separated list of target architectures to generate device code")
 
 gmx_check_hip_architectures("${GMX_HIP_TARGET_ARCH}")
+
+# Try to detect if we need RDNA support. Not very robust, but should cover the most common use.
+if (${GMX_HIP_TARGET_ARCH} MATCHES "gfx1[0-9][0-9][0-9]")
+    set(_enable_rdna_support_automatically ON)
+else()
+    set(_enable_rdna_support_automatically OFF)
+    # We assume that any GCN2-5 architecture (gfx8) and CDNA1-3 (gfx9 series) up until the time of writing of this conditional is 64-wide
+    if (${GMX_HIP_TARGET_ARCH} MATCHES "gfx8[0-9][0-9]|gfx9[0-4][0-9ac]")
+        option(GMX_GPU_NB_DISABLE_CLUSTER_PAIR_SPLIT
+                "Disable NBNXM GPU cluster pair splitting. Only supported with HIP and 64-wide GPU architectures (like AMD GCN/CDNA)."
+            ON)
+        mark_as_advanced(GMX_GPU_NB_DISABLE_CLUSTER_PAIR_SPLIT)
+    endif()
+endif()
+option(GMX_ENABLE_AMD_RDNA_SUPPORT
+        "Enable compiling kernels for AMD RDNA GPUs (gfx1xxx). When OFF, only CDNA and GCN are supported. Only used with HIP."
+    ${_enable_rdna_support_automatically})
+mark_as_advanced(GMX_ENABLE_AMD_RDNA_SUPPORT)
 
 # Set the default compilation flags for building GROMACS with HIP. The defaults here can be appended to by changing either of the
 # variables below, or by setting the GMX_HIPCC_EXTRA_FLAGS variable.
@@ -132,6 +155,10 @@ gmx_hip_check_single_flag("-fdenormal-fp-math=ieee")
 gmx_hip_check_single_flag("-fcuda-flush-denormals-to-zero")
 gmx_hip_check_single_flag("-fno-slp-vectorize")
 gmx_hip_check_single_flag("-Wno-unused-command-line-argument")
+# currently ROCm 6.2.x spams warnings about missing occupancy targets during the
+# compilation of the GPU kernels. We silence this warning here to prevent builds 
+# failing because of that.
+gmx_hip_check_single_flag("-Wno-pass-failed")
 
 # User may have supplied the optimization flags on the command line, only available for backwards compat with AMD port.
 # In general we want to control those flags based on the GROMACS build type, but won't stop users supplying different

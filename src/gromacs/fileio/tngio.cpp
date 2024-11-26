@@ -38,12 +38,21 @@
 #include "config.h"
 
 #include <cmath>
+#include <cstdint>
+#include <cstring>
 
 #include <algorithm>
 #include <iterator>
 #include <memory>
 #include <numeric>
+#include <string>
 #include <vector>
+
+#include "gromacs/topology/atoms.h"
+#include "gromacs/topology/idef.h"
+#include "gromacs/topology/topology_enums.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/enumerationhelpers.h"
 
 #if GMX_USE_TNG
 #    include "tng/tng_io.h"
@@ -306,7 +315,7 @@ void gmx_tng_add_mtop(gmx_tng_trajectory_t gmx_tng, const gmx_mtop_t* mtop)
 #    if GMX_DOUBLE
     datatype = TNG_DOUBLE_DATA;
 #    else
-    datatype                                               = TNG_FLOAT_DATA;
+    datatype = TNG_FLOAT_DATA;
 #    endif
 
     atomCharges.reserve(mtop->natoms);
@@ -813,7 +822,7 @@ void gmx_fwrite_tng(gmx_tng_trajectory_t gmx_tng,
 #    if GMX_DOUBLE
     static write_data_func_pointer write_data = tng_util_generic_with_time_double_write;
 #    else
-    static write_data_func_pointer    write_data           = tng_util_generic_with_time_write;
+    static write_data_func_pointer write_data = tng_util_generic_with_time_write;
 #    endif
     double  elapsedSeconds = elapsedPicoSeconds * gmx::c_pico;
     int64_t nParticles;

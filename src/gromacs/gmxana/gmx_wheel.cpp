@@ -39,16 +39,25 @@
 #include <cstring>
 
 #include <algorithm>
+#include <filesystem>
+#include <string>
 
+#include "gromacs/commandline/filenm.h"
 #include "gromacs/commandline/pargs.h"
+#include "gromacs/fileio/filetypes.h"
 #include "gromacs/fileio/writeps.h"
 #include "gromacs/gmxana/gmx_ana.h"
+#include "gromacs/math/functions.h"
 #include "gromacs/math/vec.h"
 #include "gromacs/utility/arraysize.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/fatalerror.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/strdb.h"
+
+struct gmx_output_env_t;
 
 static gmx_bool* bPhobics(int nres, char* resnm[])
 {
@@ -69,7 +78,7 @@ static gmx_bool* bPhobics(int nres, char* resnm[])
     return bb;
 }
 
-static void wheel(const char* fn, int nres, char* resnm[], int r0, real rot0, char* title)
+static void wheel(const char* fn, int nres, char* resnm[], int r0, real rot0, const char* title)
 {
     const real fontsize  = 16;
     const real gray      = 0.9;
@@ -146,7 +155,7 @@ static void wheel(const char* fn, int nres, char* resnm[], int r0, real rot0, ch
     ps_close(&out);
 }
 
-static void wheel2(const char* fn, int nres, char* resnm[], real rot0, char* title)
+static void wheel2(const char* fn, int nres, char* resnm[], real rot0, const char* title)
 {
     const real fontsize  = 14;
     const real gray      = 0.9;
@@ -219,18 +228,18 @@ int gmx_wheel(int argc, char* argv[])
     char*             title = nullptr;
     int               r0    = 1;
     t_pargs  pa[]  = { { "-r0", FALSE, etINT, { &r0 }, "The first residue number in the sequence" },
-                     { "-rot0",
-                       FALSE,
-                       etREAL,
-                       { &rot0 },
-                       "Rotate around an angle initially (90 degrees makes sense)" },
-                     { "-T",
-                       FALSE,
-                       etSTR,
-                       { &title },
-                       "Plot a title in the center of the wheel (must be shorter than 10 "
-                       "characters, or it will overwrite the wheel)" },
-                     { "-nn", FALSE, etBOOL, { &bNum }, "Toggle numbers" } };
+                       { "-rot0",
+                         FALSE,
+                         etREAL,
+                         { &rot0 },
+                         "Rotate around an angle initially (90 degrees makes sense)" },
+                       { "-T",
+                         FALSE,
+                         etSTR,
+                         { &title },
+                         "Plot a title in the center of the wheel (must be shorter than 10 "
+                           "characters, or it will overwrite the wheel)" },
+                       { "-nn", FALSE, etBOOL, { &bNum }, "Toggle numbers" } };
     t_filenm fnm[] = { { efDAT, "-f", nullptr, ffREAD }, { efEPS, "-o", nullptr, ffWRITE } };
 #define NFILE asize(fnm)
 

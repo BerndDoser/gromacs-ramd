@@ -41,7 +41,10 @@
 #ifndef GMX_MODULARSIMULATOR_ANDERSENTHERMOSTAT_H
 #define GMX_MODULARSIMULATOR_ANDERSENTHERMOSTAT_H
 
+#include <cstdint>
+
 #include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/real.h"
 
 #include "energydata.h"
 #include "modularsimulatorinterfaces.h"
@@ -52,6 +55,14 @@ struct t_mdatoms;
 
 namespace gmx
 {
+class FreeEnergyPerturbationData;
+class GlobalCommunicationHelper;
+class LegacySimulatorData;
+class MDAtoms;
+class ModularSimulatorAlgorithmBuilderHelper;
+class ObservablesReducer;
+class StatePropagatorData;
+enum class ReferenceTemperatureChangeAlgorithm;
 
 /*! \internal
  * \ingroup module_modularsimulator
@@ -98,11 +109,11 @@ public:
      */
     static ISimulatorElement* getElementPointerImpl(LegacySimulatorData* legacySimulatorData,
                                                     ModularSimulatorAlgorithmBuilderHelper* builderHelper,
-                                                    StatePropagatorData*        statePropagatorData,
-                                                    EnergyData*                 energyData,
+                                                    StatePropagatorData* statePropagatorData,
+                                                    EnergyData*          energyData,
                                                     FreeEnergyPerturbationData* freeEnergyPerturbationData,
                                                     GlobalCommunicationHelper* globalCommunicationHelper,
-                                                    ObservablesReducer*        observablesReducer);
+                                                    ObservablesReducer* observablesReducer);
 
     //! Returns the frequency at which temperature coupling is performed
     [[nodiscard]] int frequency() const;

@@ -36,9 +36,12 @@
 #include "sfactor.h"
 
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
 #include <algorithm>
+#include <filesystem>
+#include <string>
 
 #include "gromacs/fileio/confio.h"
 #include "gromacs/fileio/trxio.h"
@@ -51,8 +54,10 @@
 #include "gromacs/topology/topology.h"
 #include "gromacs/trajectory/trajectoryframe.h"
 #include "gromacs/utility/arraysize.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/fatalerror.h"
+#include "gromacs/utility/fileptr.h"
 #include "gromacs/utility/futil.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/strdb.h"
@@ -227,12 +232,12 @@ extern void compute_structure_factor(structure_factor_t* sft,
             }
         }
     } /* end loop on i */
-      /*
-       *  compute the square modulus of the structure factor, averaging on the surface
-       *  kx*kx + ky*ky + kz*kz = krr*krr
-       *  note that this is correct only for a (on the macroscopic scale)
-       *  isotropic system.
-       */
+    /*
+     *  compute the square modulus of the structure factor, averaging on the surface
+     *  kx*kx + ky*ky + kz*kz = krr*krr
+     *  note that this is correct only for a (on the macroscopic scale)
+     *  isotropic system.
+     */
     for (i = 0; i < maxkx; i++)
     {
         kx = i * k_factor[XX];

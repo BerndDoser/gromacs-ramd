@@ -42,10 +42,23 @@
 
 #include "gromacs/gmxpreprocess/insert_molecules.h"
 
+#include <functional>
+#include <memory>
+#include <string>
+
+#include <gtest/gtest.h>
+
+#include "gromacs/commandline/cmdlineoptionsmodule.h"
+#include "gromacs/utility/arrayref.h"
+
 #include "testutils/cmdlinetest.h"
 #include "testutils/refdata.h"
 #include "testutils/textblockmatchers.h"
 
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
@@ -130,3 +143,5 @@ TEST_F(InsertMoleculesTest, InsertsMoleculesIntoFixedPositions)
 }
 
 } // namespace
+} // namespace test
+} // namespace gmx

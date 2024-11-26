@@ -39,11 +39,15 @@
 #include "checkpoint.h"
 
 #include <cerrno>
+#include <cinttypes>
 #include <cstdlib>
 #include <cstring>
 
+#include <algorithm>
 #include <array>
+#include <iterator>
 #include <memory>
+#include <type_traits>
 
 #include "gromacs/fileio/filetypes.h"
 #include "gromacs/fileio/gmxfio.h"
@@ -75,20 +79,27 @@
 #include "gromacs/utility/baseversion.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/enumerationhelpers.h"
+#include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/futil.h"
 #include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/int64_to_int.h"
+#include "gromacs/utility/iserializer.h"
 #include "gromacs/utility/keyvaluetree.h"
 #include "gromacs/utility/keyvaluetreebuilder.h"
 #include "gromacs/utility/keyvaluetreeserializer.h"
 #include "gromacs/utility/programcontext.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
+#include "gromacs/utility/stringutil.h"
 #include "gromacs/utility/sysinfo.h"
 #include "gromacs/utility/textwriter.h"
 #include "gromacs/utility/txtdump.h"
 
 #include "buildinfo.h"
+
+
+enum class ChannelHistory : int;
 
 #define CPT_MAGIC1 171817
 #define CPT_MAGIC2 171819
@@ -312,7 +323,8 @@ static const char* enumValueToString(StatePullEntry enumValue)
 enum class StateFepEntry : int
 {
     IsEquilibrated,
-    NumAtLambda,
+    NumAtLambdaStats,
+    NumAtLambdaEquil,
     WangLandauHistogram,
     WangLandauDelta,
     SumWeights,
@@ -333,7 +345,8 @@ static const char* enumValueToString(StateFepEntry enumValue)
 {
     static constexpr gmx::EnumerationArray<StateFepEntry, const char*> stateFepEntryNames = {
         "bEquilibrated",
-        "N_at_state",
+        "Number at State Stats",
+        "Number at State Equil",
         "Wang-Landau Histogram",
         "Wang-Landau Delta",
         "Weights",
@@ -457,7 +470,7 @@ static int do_cpt_u_chars(XDR* xd, const char* desc, int n, unsigned char* i, FI
 template<typename EnumType>
 static int do_cpt_enum_as_int(XDR* xd, const char* desc, EnumType* enumValue, FILE* list)
 {
-    static_assert(std::is_same<std::underlying_type_t<EnumType>, int>::value,
+    static_assert(std::is_same_v<std::underlying_type_t<EnumType>, int>,
                   "Only enums with underlying type int are supported.");
     auto castedValue = static_cast<int>(*enumValue);
     if (xdr_int(xd, &castedValue) == 0)
@@ -1924,8 +1937,13 @@ static int do_cpt_df_hist(XDR* xd, int fflags, int nlambda, df_history_t** dfhis
                 case StateFepEntry::IsEquilibrated:
                     ret = do_cpte_bool(xd, *i, fflags, &dfhist->bEquil, list);
                     break;
-                case StateFepEntry::NumAtLambda:
-                    ret = do_cpte_ints(xd, *i, fflags, nlambda, &dfhist->n_at_lam, list);
+                case StateFepEntry::NumAtLambdaStats:
+                    ret = do_cpte_ints(
+                            xd, *i, fflags, nlambda, &dfhist->numSamplesAtLambdaForStatistics, list);
+                    break;
+                case StateFepEntry::NumAtLambdaEquil:
+                    ret = do_cpte_ints(
+                            xd, *i, fflags, nlambda, &dfhist->numSamplesAtLambdaForEquilibration, list);
                     break;
                 case StateFepEntry::WangLandauHistogram:
                     ret = do_cpte_reals(xd, *i, fflags, nlambda, &dfhist->wl_histo, list);
@@ -2395,7 +2413,8 @@ void write_checkpoint_data(t_fileio*                         fp,
     {
         headerContents.flags_dfh =
                 (enumValueToBitMask(StateFepEntry::IsEquilibrated)
-                 | enumValueToBitMask(StateFepEntry::NumAtLambda)
+                 | enumValueToBitMask(StateFepEntry::NumAtLambdaStats)
+                 | enumValueToBitMask(StateFepEntry::NumAtLambdaEquil)
                  | enumValueToBitMask(StateFepEntry::SumWeights) | enumValueToBitMask(StateFepEntry::SumDG)
                  | enumValueToBitMask(StateFepEntry::Tij) | enumValueToBitMask(StateFepEntry::TijEmp));
         if (EWL(elamstats))

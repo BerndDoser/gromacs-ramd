@@ -34,26 +34,40 @@
 #include "gmxpre.h"
 
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 
+#include <filesystem>
+#include <string>
+
+#include "gromacs/commandline/filenm.h"
 #include "gromacs/commandline/pargs.h"
 #include "gromacs/fileio/confio.h"
+#include "gromacs/fileio/filetypes.h"
+#include "gromacs/fileio/oenv.h"
 #include "gromacs/fileio/trxio.h"
 #include "gromacs/fileio/xvgr.h"
 #include "gromacs/gmxana/gmx_ana.h"
 #include "gromacs/math/units.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
+#include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/pbcutil/rmpbc.h"
 #include "gromacs/statistics/statistics.h"
+#include "gromacs/topology/block.h"
 #include "gromacs/topology/index.h"
 #include "gromacs/topology/topology.h"
 #include "gromacs/trajectory/trajectoryframe.h"
 #include "gromacs/utility/arraysize.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
+
+struct gmx_output_env_t;
 
 constexpr double EPSI0 = (gmx::c_epsilon0 * gmx::c_electronCharge * gmx::c_electronCharge * gmx::c_avogadro
                           / (gmx::c_kilo * gmx::c_nano)); /* c_epsilon0 in SI units */
@@ -807,40 +821,40 @@ int gmx_current(int argc, char* argv[])
     static real     evit    = 5.0;
     t_pargs         pa[]    = {
         { "-sh",
-          FALSE,
-          etINT,
-          { &nshift },
-          "Shift of the frames for averaging the correlation functions and the mean-square "
-          "displacement." },
+                     FALSE,
+                     etINT,
+                     { &nshift },
+                     "Shift of the frames for averaging the correlation functions and the mean-square "
+                                "displacement." },
         { "-nojump", FALSE, etBOOL, { &bNoJump }, "Removes jumps of atoms across the box." },
         { "-eps",
-          FALSE,
-          etREAL,
-          { &eps_rf },
-          "Dielectric constant of the surrounding medium. The value zero corresponds to "
-          "infinity (tin-foil boundary conditions)." },
+                     FALSE,
+                     etREAL,
+                     { &eps_rf },
+                     "Dielectric constant of the surrounding medium. The value zero corresponds to "
+                                "infinity (tin-foil boundary conditions)." },
         { "-bfit",
-          FALSE,
-          etREAL,
-          { &bfit },
-          "Begin of the fit of the straight line to the MSD of the translational fraction "
-          "of the dipole moment." },
+                     FALSE,
+                     etREAL,
+                     { &bfit },
+                     "Begin of the fit of the straight line to the MSD of the translational fraction "
+                                "of the dipole moment." },
         { "-efit",
-          FALSE,
-          etREAL,
-          { &efit },
-          "End of the fit of the straight line to the MSD of the translational fraction of "
-          "the dipole moment." },
+                     FALSE,
+                     etREAL,
+                     { &efit },
+                     "End of the fit of the straight line to the MSD of the translational fraction of "
+                                "the dipole moment." },
         { "-bvit",
-          FALSE,
-          etREAL,
-          { &bvit },
-          "Begin of the fit of the current autocorrelation function to a*t^b." },
+                     FALSE,
+                     etREAL,
+                     { &bvit },
+                     "Begin of the fit of the current autocorrelation function to a*t^b." },
         { "-evit",
-          FALSE,
-          etREAL,
-          { &evit },
-          "End of the fit of the current autocorrelation function to a*t^b." },
+                     FALSE,
+                     etREAL,
+                     { &evit },
+                     "End of the fit of the current autocorrelation function to a*t^b." },
         { "-temp", FALSE, etREAL, { &temp }, "Temperature for calculating epsilon." }
     };
 
@@ -869,14 +883,14 @@ int gmx_current(int argc, char* argv[])
     FILE*             fmjdsp = nullptr;
     FILE*             fcur   = nullptr;
     t_filenm          fnm[]  = { { efTPS, nullptr, nullptr, ffREAD }, /* this is for the topology */
-                       { efNDX, nullptr, nullptr, ffOPTRD },
-                       { efTRX, "-f", nullptr, ffREAD }, /* and this for the trajectory */
-                       { efXVG, "-o", "current", ffWRITE },
-                       { efXVG, "-caf", "caf", ffOPTWR },
-                       { efXVG, "-dsp", "dsp", ffWRITE },
-                       { efXVG, "-md", "md", ffWRITE },
-                       { efXVG, "-mj", "mj", ffWRITE },
-                       { efXVG, "-mc", "mc", ffOPTWR } };
+                                 { efNDX, nullptr, nullptr, ffOPTRD },
+                                 { efTRX, "-f", nullptr, ffREAD }, /* and this for the trajectory */
+                                 { efXVG, "-o", "current", ffWRITE },
+                                 { efXVG, "-caf", "caf", ffOPTWR },
+                                 { efXVG, "-dsp", "dsp", ffWRITE },
+                                 { efXVG, "-md", "md", ffWRITE },
+                                 { efXVG, "-mj", "mj", ffWRITE },
+                                 { efXVG, "-mc", "mc", ffOPTWR } };
 
 #define NFILE asize(fnm)
 

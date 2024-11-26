@@ -34,25 +34,35 @@
 #include "gmxpre.h"
 
 #include <cmath>
+#include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
 #include <algorithm>
 #include <array>
+#include <filesystem>
+#include <string>
+#include <vector>
 
+#include "gromacs/commandline/filenm.h"
 #include "gromacs/commandline/pargs.h"
 #include "gromacs/commandline/viewit.h"
 #include "gromacs/correlationfunctions/autocorr.h"
 #include "gromacs/fileio/enxio.h"
+#include "gromacs/fileio/filetypes.h"
 #include "gromacs/fileio/gmxfio.h"
+#include "gromacs/fileio/oenv.h"
 #include "gromacs/fileio/tpxio.h"
 #include "gromacs/fileio/trxio.h"
+#include "gromacs/fileio/xdr_datatype.h"
 #include "gromacs/fileio/xvgr.h"
 #include "gromacs/gmxana/gmx_ana.h"
 #include "gromacs/gmxana/gstat.h"
 #include "gromacs/math/functions.h"
 #include "gromacs/math/units.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/mdlib/energyoutput.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/md_enums.h"
@@ -63,14 +73,18 @@
 #include "gromacs/trajectory/energyframe.h"
 #include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/arraysize.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/pleasecite.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/strconvert.h"
 #include "gromacs/utility/stringutil.h"
+
+struct gmx_output_env_t;
 
 static const int NOTSET = -23451;
 
@@ -327,6 +341,7 @@ static void einstein_visco(const char*             fn,
                            const real              volume,
                            const real              temperature,
                            const int               numRestarts,
+                           const int               numBlocks,
                            double                  dt,
                            const gmx_output_env_t* oenv)
 {
@@ -349,7 +364,14 @@ static void einstein_visco(const char*             fn,
         eneint[2][i + 1] = eneint[2][i] + 0.5 * (edat.s[5].es[i].sum + edat.s[7].es[i].sum) * fac;
     }
 
-    const int nf4 = nint / 4 + 1;
+    if (numBlocks <= 0)
+    {
+        GMX_THROW(
+                gmx::InvalidInputError("The number of averaging blocks for computing the viscosity "
+                                       "using Einstein should be positive"));
+    }
+
+    const int nintBlock = nint / numBlocks + 1;
 
     if (numRestarts <= 0)
     {
@@ -358,12 +380,12 @@ static void einstein_visco(const char*             fn,
                                        "Einstein should be positive"));
     }
 
-    const int stepSize = std::max(nf4 / numRestarts, 1);
+    const int stepSize = std::max(nintBlock / numRestarts, 1);
 
     printf("\n");
     printf("Computing shear viscosity using the Einstein relation with %d start points separated "
            "by %g ps\n",
-           gmx::divideRoundUp(nf4, stepSize),
+           gmx::divideRoundUp(nintBlock, stepSize),
            stepSize * dt);
 
 
@@ -372,7 +394,7 @@ static void einstein_visco(const char*             fn,
     FILE* fp0 = xvgropen(fni, "Shear viscosity integral", "Time (ps)", "(kg m\\S-1\\N s\\S-1\\N ps)", oenv);
     FILE* fp1 = xvgropen(
             fn, "Shear viscosity using Einstein relation", "Time (ps)", "(kg m\\S-1\\N s\\S-1\\N)", oenv);
-    for (int i = 0; i < nf4; i += stepSize)
+    for (int i = 0; i < nintBlock; i += stepSize)
     {
         std::array<double, c_numSets + 1> av = { 0.0 };
 
@@ -910,6 +932,7 @@ static void analyse_ener(gmx_bool                         bCorr,
                          const bool                       computeACViscosity,
                          const bool                       computeEinsteinViscosity,
                          const int                        einsteinRestarts,
+                         const int                        einsteinBlocks,
                          const char*                      visfn,
                          int                              nmol,
                          int64_t                          start_step,
@@ -1173,7 +1196,8 @@ static void analyse_ener(gmx_bool                         bCorr,
 
             if (computeEinsteinViscosity)
             {
-                einstein_visco(eviscofn, eviscoifn, 3, *edat, Vaver, Temp, einsteinRestarts, Dt, oenv);
+                einstein_visco(
+                        eviscofn, eviscoifn, 3, *edat, Vaver, Temp, einsteinRestarts, einsteinBlocks, Dt, oenv);
             }
 
             if (computeACViscosity)
@@ -1747,69 +1771,76 @@ int gmx_energy(int argc, char* argv[])
         "Note that frequent pressure calculation (nstcalcenergy mdp parameter) is still needed. ",
         "Option [TT]-evicso[tt] gives this shear viscosity estimate and option [TT]-eviscoi[tt] ",
         "the integral. Using one of these two options also triggers the other. ",
-        "The viscosity is computed from integrals averaged over [TT]-einstein_restarts[tt] ",
-        "starting points uniformly distributed over the first quarter of the trajectory."
+        "The viscosity is computed from integrals averaged over uniformly distributed ",
+        "[TT]-einstein_restarts[tt] starting points, which are sampled over one block out of ",
+        "[TT]-einstein_blocks[tt] of the trajectory."
     };
     static gmx_bool bSum = FALSE, bFee = FALSE, bPrAll = FALSE, bFluct = FALSE, bDriftCorr = FALSE;
     static gmx_bool bDp = FALSE, bMutot = FALSE, bOrinst = FALSE, bOvec = FALSE, bFluctProps = FALSE;
-    static int      nmol = 1, nbmin = 5, nbmax = 5;
-    static real     reftemp = 300.0, ezero = 0;
-    static int      einsteinRestarts = 100;
-    t_pargs         pa[]             = {
+    static int  nmol = 1, nbmin = 5, nbmax = 5;
+    static real reftemp = 300.0, ezero = 0;
+    static int  einsteinRestarts = 100;
+    static int  einsteinBlocks   = 4;
+    t_pargs     pa[]             = {
         { "-fee", FALSE, etBOOL, { &bFee }, "Do a free energy estimate" },
         { "-fetemp",
-          FALSE,
-          etREAL,
-          { &reftemp },
-          "Reference temperature for free energy calculation" },
+                          FALSE,
+                          etREAL,
+                          { &reftemp },
+                          "Reference temperature for free energy calculation" },
         { "-zero", FALSE, etREAL, { &ezero }, "Subtract a zero-point energy" },
         { "-sum",
-          FALSE,
-          etBOOL,
-          { &bSum },
-          "Sum the energy terms selected rather than display them all" },
+                          FALSE,
+                          etBOOL,
+                          { &bSum },
+                          "Sum the energy terms selected rather than display them all" },
         { "-dp", FALSE, etBOOL, { &bDp }, "Print energies in high precision" },
         { "-nbmin", FALSE, etINT, { &nbmin }, "Minimum number of blocks for error estimate" },
         { "-nbmax", FALSE, etINT, { &nbmax }, "Maximum number of blocks for error estimate" },
         { "-mutot",
-          FALSE,
-          etBOOL,
-          { &bMutot },
-          "Compute the total dipole moment from the components" },
+                          FALSE,
+                          etBOOL,
+                          { &bMutot },
+                          "Compute the total dipole moment from the components" },
         { "-aver",
-          FALSE,
-          etBOOL,
-          { &bPrAll },
-          "Also print the exact average and rmsd stored in the energy frames (only when 1 term is "
-          "requested)" },
+                          FALSE,
+                          etBOOL,
+                          { &bPrAll },
+                          "Also print the exact average and rmsd stored in the energy frames (only when 1 term is "
+                                          "requested)" },
         { "-nmol",
-          FALSE,
-          etINT,
-          { &nmol },
-          "Number of molecules in your sample: the energies are divided by this number" },
+                          FALSE,
+                          etINT,
+                          { &nmol },
+                          "Number of molecules in your sample: the energies are divided by this number" },
         { "-fluct_props",
-          FALSE,
-          etBOOL,
-          { &bFluctProps },
-          "Compute properties based on energy fluctuations, like heat capacity" },
+                          FALSE,
+                          etBOOL,
+                          { &bFluctProps },
+                          "Compute properties based on energy fluctuations, like heat capacity" },
         { "-driftcorr",
-          FALSE,
-          etBOOL,
-          { &bDriftCorr },
-          "Useful only for calculations of fluctuation properties. The drift in the observables "
-          "will be subtracted before computing the fluctuation properties." },
+                          FALSE,
+                          etBOOL,
+                          { &bDriftCorr },
+                          "Useful only for calculations of fluctuation properties. The drift in the observables "
+                                          "will be subtracted before computing the fluctuation properties." },
         { "-fluc",
-          FALSE,
-          etBOOL,
-          { &bFluct },
-          "Calculate autocorrelation of energy fluctuations rather than energy itself" },
+                          FALSE,
+                          etBOOL,
+                          { &bFluct },
+                          "Calculate autocorrelation of energy fluctuations rather than energy itself" },
         { "-orinst", FALSE, etBOOL, { &bOrinst }, "Analyse instantaneous orientation data" },
         { "-ovec", FALSE, etBOOL, { &bOvec }, "Also plot the eigenvectors with [TT]-oten[tt]" },
         { "-einstein_restarts",
-          FALSE,
-          etINT,
-          { &einsteinRestarts },
-          "Number of restarts for computing the viscosity using the Einstein relation" }
+                          FALSE,
+                          etINT,
+                          { &einsteinRestarts },
+                          "Number of restarts for computing the viscosity using the Einstein relation" },
+        { "-einstein_blocks",
+                          FALSE,
+                          etINT,
+                          { &einsteinBlocks },
+                          "Number of averaging windows for computing the viscosity using the Einstein relation" }
     };
     static const char* setnm[] = { "Pres-XX", "Pres-XY",     "Pres-XZ", "Pres-YX",
                                    "Pres-YY", "Pres-YZ",     "Pres-ZX", "Pres-ZY",
@@ -1903,6 +1934,11 @@ int gmx_energy(int argc, char* argv[])
                         if (1 != scanf("%lf", &dbl))
                         {
                             gmx_fatal(FARGS, "Error reading user input");
+                        }
+                        if (dbl <= 0)
+                        {
+                            GMX_THROW(gmx::InvalidInputError(
+                                    "The box volume needs to be a positive real number."));
                         }
                         Vaver = dbl;
                     }
@@ -2208,6 +2244,7 @@ int gmx_energy(int argc, char* argv[])
                      computeACViscosity,
                      computeEinsteinViscosity,
                      einsteinRestarts,
+                     einsteinBlocks,
                      opt2fn("-vis", NFILE, fnm),
                      nmol,
                      start_step,

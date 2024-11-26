@@ -41,8 +41,14 @@
 
 #include "gromacs/random/threefry.h"
 
+#include <cstdint>
+
+#include <string>
+#include <vector>
+
 #include <gtest/gtest.h>
 
+#include "gromacs/random/seed.h"
 #include "gromacs/utility/exceptions.h"
 
 #include "testutils/refdata.h"
@@ -50,7 +56,8 @@
 
 namespace gmx
 {
-
+namespace test
+{
 namespace
 {
 
@@ -240,5 +247,5 @@ TEST_F(ThreeFry2x64Test, ExhaustInternalCounter)
 }
 
 } // namespace
-
+} // namespace test
 } // namespace gmx

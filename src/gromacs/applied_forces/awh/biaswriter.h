@@ -46,6 +46,7 @@
 #define GMX_AWH_BIASWRITER_H
 
 #include <map>
+#include <utility>
 #include <vector>
 
 #include "gromacs/fileio/enxio.h"
@@ -192,7 +193,7 @@ private:
      */
     void prepareBiasOutput(const Bias& bias);
 
-    std::vector<AwhEnergyBlock>       block_; /**< The data blocks */
+    std::vector<AwhEnergyBlock> block_; /**< The data blocks */
     std::map<AwhOutputEntryType, int> outputTypeToBlock_; /**< Start block index for each variable, -1 when variable should not be written */
 };
 

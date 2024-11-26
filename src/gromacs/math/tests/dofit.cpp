@@ -40,15 +40,24 @@
  */
 #include "gmxpre.h"
 
+#include <cmath>
+
 #include <array>
+#include <string>
 
 #include <gtest/gtest.h>
 
 #include "gromacs/math/do_fit.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
+#include "gromacs/utility/real.h"
 
 #include "testutils/testasserts.h"
 
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
@@ -57,7 +66,7 @@ using gmx::test::defaultRealTolerance;
 class StructureSimilarityTest : public ::testing::Test
 {
 protected:
-    static constexpr int       c_nAtoms = 4;
+    static constexpr int c_nAtoms = 4;
     std::array<RVec, c_nAtoms> structureA_{ { { 1, 0, 0 }, { 0, 1, 0 }, { 0, 0, 1 }, { 0, 0, 0 } } };
     std::array<RVec, c_nAtoms> structureB_{ { { 0, 1, 0 }, { 0, 0, 1 }, { 1, 0, 0 }, { 0, 0, 0 } } };
     std::array<real, c_nAtoms> masses_{ { 1, 1, 1, 0 } };
@@ -100,3 +109,5 @@ TEST_F(StructureSimilarityTest, YieldsCorrectRhoWidthIndex)
 }
 
 } // namespace
+} // namespace test
+} // namespace gmx

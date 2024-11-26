@@ -41,12 +41,18 @@
 #include <cstring>
 
 #include <algorithm>
+#include <array>
+#include <bitset>
+#include <filesystem>
 #include <memory>
 #include <numeric>
+#include <string>
+#include <vector>
 
 #include "gromacs/applied_forces/awh/read_params.h"
 #include "gromacs/math/veccompare.h"
 #include "gromacs/math/vecdump.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/mdlib/vcm.h"
 #include "gromacs/mdtypes/awh_params.h"
 #include "gromacs/mdtypes/md_enums.h"
@@ -54,11 +60,15 @@
 #include "gromacs/mdtypes/pull_params.h"
 #include "gromacs/mdtypes/ramd_params.h"
 #include "gromacs/pbcutil/pbc.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/compare.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/fatalerror.h"
+#include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/keyvaluetree.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/snprintf.h"
 #include "gromacs/utility/strconvert.h"
@@ -542,8 +552,9 @@ static void pr_expandedvals(FILE* fp, int indent, const t_expanded* expand, int 
     PS("wl-oneovert", EBOOL(expand->bWLoneovert));
 
     pr_indent(fp, indent);
-    pr_rvec(fp, indent, "init-lambda-weights", expand->init_lambda_weights.data(), n_lambda, TRUE);
-    PS("init-weights", EBOOL(expand->bInit_weights));
+    pr_rvec(fp, indent, "init-lambda-weights", expand->initLambdaWeights.data(), n_lambda, TRUE);
+    pr_rvec(fp, indent, "init-lambda-counts", expand->initLambdaCounts.data(), n_lambda, TRUE);
+    pr_rvec(fp, indent, "init-wl-histogram-counts", expand->initWlHistogramCounts.data(), n_lambda, TRUE);
 }
 
 static void pr_fepvals(FILE* fp, int indent, const t_lambda* fep, gmx_bool bMDPformat)
@@ -981,16 +992,8 @@ void pr_inputrec(FILE* fp, int indent, const char* title, const t_inputrec* ir, 
         // Refcoord-scaling is also needed for other algorithms that affect the box
         PS("refcoord-scaling", enumValueToString(ir->pressureCouplingOptions.refcoord_scaling));
 
-        if (bMDPformat)
-        {
-            fprintf(fp, "posres-com  = %g %g %g\n", ir->posres_com[XX], ir->posres_com[YY], ir->posres_com[ZZ]);
-            fprintf(fp, "posres-comB = %g %g %g\n", ir->posres_comB[XX], ir->posres_comB[YY], ir->posres_comB[ZZ]);
-        }
-        else
-        {
-            pr_rvec(fp, indent, "posres-com", ir->posres_com, DIM, TRUE);
-            pr_rvec(fp, indent, "posres-comB", ir->posres_comB, DIM, TRUE);
-        }
+        prRVecs(fp, indent, "posres-com", ir->posresCom);
+        prRVecs(fp, indent, "posres-comB", ir->posresComB);
 
         /* QMMM */
         PS("QMMM", EBOOL(ir->bQMMM));
@@ -1343,20 +1346,38 @@ static void cmp_expandedvals(FILE*             fp,
 {
     int i;
 
-    cmp_bool(fp, "inputrec->fepvals->bInit_weights", -1, expand1->bInit_weights, expand2->bInit_weights);
     cmp_bool(fp, "inputrec->fepvals->bWLoneovert", -1, expand1->bWLoneovert, expand2->bWLoneovert);
 
     for (i = 0; i < n_lambda; i++)
     {
         cmp_real(fp,
-                 "inputrec->expandedvals->init_lambda_weights",
+                 "inputrec->expandedvals->initLambdaWeights",
                  -1,
-                 expand1->init_lambda_weights[i],
-                 expand2->init_lambda_weights[i],
+                 expand1->initLambdaWeights[i],
+                 expand2->initLambdaWeights[i],
                  ftol,
                  abstol);
     }
 
+    for (i = 0; i < n_lambda; i++)
+    {
+        cmp_int(fp,
+                "inputrec->expandedvals->initLambdaCounts",
+                -1,
+                expand1->initLambdaCounts[i],
+                expand2->initLambdaCounts[i]);
+    }
+
+    for (i = 0; i < n_lambda; i++)
+    {
+        cmp_real(fp,
+                 "inputrec->expandedvals->initWlHistogramCounts",
+                 -1,
+                 expand1->initWlHistogramCounts[i],
+                 expand2->initWlHistogramCounts[i],
+                 ftol,
+                 abstol);
+    }
     cmpEnum(fp, "inputrec->expandedvals->lambda-stats", expand1->elamstats, expand2->elamstats);
     cmpEnum(fp, "inputrec->expandedvals->lambda-mc-move", expand1->elmcmove, expand2->elmcmove);
     cmp_int(fp, "inputrec->expandedvals->lmc-repeats", -1, expand1->lmc_repeats, expand2->lmc_repeats);
@@ -1543,8 +1564,12 @@ void cmp_inputrec(FILE* fp, const t_inputrec* ir1, const t_inputrec* ir2, real f
             "refcoord_scaling",
             ir1->pressureCouplingOptions.refcoord_scaling,
             ir2->pressureCouplingOptions.refcoord_scaling);
-    cmp_rvec(fp, "inputrec->posres_com", -1, ir1->posres_com, ir2->posres_com, ftol, abstol);
-    cmp_rvec(fp, "inputrec->posres_comB", -1, ir1->posres_comB, ir2->posres_comB, ftol, abstol);
+    cmp_int(fp, "inputrec->numPosresCom", -1, gmx::ssize(ir1->posresCom), gmx::ssize(ir2->posresCom));
+    if (!ir1->posresCom.empty() && gmx::ssize(ir1->posresCom) == gmx::ssize(ir2->posresCom))
+    {
+        cmpRVecs(fp, "inputrec->posresCom", ir1->posresCom, ir2->posresCom, false, ftol, abstol);
+        cmpRVecs(fp, "inputrec->posresComB", ir1->posresComB, ir2->posresComB, false, ftol, abstol);
+    }
     cmp_real(fp, "inputrec->verletbuf_tol", -1, ir1->verletbuf_tol, ir2->verletbuf_tol, ftol, abstol);
     cmp_real(fp,
              "inputrec->verlet-buffer-pressure-tolerance",

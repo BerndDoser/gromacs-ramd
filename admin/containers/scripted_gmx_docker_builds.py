@@ -83,15 +83,6 @@ except ImportError:
     )
 
 
-def shlex_join(split_command):
-    """Return a shell-escaped string from *split_command*.
-
-    Copied from Python 3.8.
-    Can be replaced with shlex.join once we don't need to support Python 3.7.
-    """
-    return " ".join(shlex.quote(arg) for arg in split_command)
-
-
 # Basic packages for all final images.
 _common_packages = [
     "build-essential",
@@ -159,8 +150,6 @@ _cp2k_extra_packages = [
     "nano",
     "patch",
     "pkg-config",
-    "python",
-    "python-numpy",
     "python3",
     "unzip",
     "xxd",
@@ -298,10 +287,14 @@ def get_llvm_packages(args) -> typing.Iterable[str]:
         packages = [
             f"libomp-{args.llvm}-dev",
             f"libomp5-{args.llvm}",
+            f"libc++-{args.llvm}-dev",
+            f"libc++1-{args.llvm}",
+            f"libc++abi-{args.llvm}-dev",
+            f"libc++abi1-{args.llvm}",
             "clang-format-" + str(args.llvm),
             "clang-tidy-" + str(args.llvm),
         ]
-        if args.hipsycl is not None:
+        if args.adaptivecpp is not None:
             packages += [
                 f"llvm-{args.llvm}-dev",
                 f"libclang-{args.llvm}-dev",
@@ -351,11 +344,13 @@ def get_rocm_repository(args) -> "hpccm.building_blocks.base":
         if rocm_version[0] < 5 or (rocm_version[0] == 5 and rocm_version[1] < 3):
             dist_string = "ubuntu"
         else:
-            dist_string = {"20.04": "focal", "22.04": "jammy"}[args.ubuntu]
+            dist_string = {"20.04": "focal", "22.04": "jammy", "24.04": "noble"}[
+                args.ubuntu
+            ]
     return hpccm.building_blocks.packages(
         apt_keys=["http://repo.radeon.com/rocm/rocm.gpg.key"],
         apt_repositories=[
-            f"deb [arch=amd64] http://repo.radeon.com/rocm/apt/{args.rocm}/ {dist_string} main"
+            f"deb [arch=amd64 signed-by=/usr/share/keyrings/rocm.gpg.gpg] http://repo.radeon.com/rocm/apt/{args.rocm}/ {dist_string} main"
         ],
     )
 
@@ -432,9 +427,9 @@ def get_compiler(
 def get_gdrcopy(args, compiler):
     if args.cuda is not None:
         if hasattr(compiler, "toolchain"):
-            # Version last updated June 7, 2021
+            # Version last updated August 15, 2024
             return hpccm.building_blocks.gdrcopy(
-                toolchain=compiler.toolchain, version="2.2"
+                toolchain=compiler.toolchain, version="2.4.1"
             )
         else:
             raise RuntimeError("compiler is not an HPCCM compiler building block!")
@@ -443,15 +438,23 @@ def get_gdrcopy(args, compiler):
 
 
 def get_ucx(args, compiler, gdrcopy):
-    if args.cuda is not None:
+    if args.cuda is not None or args.rocm is not None:
         if hasattr(compiler, "toolchain"):
             use_gdrcopy = gdrcopy is not None
             # We disable `-Werror`, since there are some unknown pragmas and unused variables which upset clang
             toolchain = copy.copy(compiler.toolchain)
             toolchain.CFLAGS = "-Wno-error"
-            # Version last updated January 24, 2023
+            configure_opts = []
+            if args.rocm is not None:
+                configure_opts.append("--with-rocm=/opt/rocm")
+            use_cuda = args.cuda is not None
+            # Version last updated August 15, 2024
             return hpccm.building_blocks.ucx(
-                toolchain=toolchain, gdrcopy=use_gdrcopy, version="1.13.1", cuda=True
+                toolchain=toolchain,
+                gdrcopy=use_gdrcopy,
+                version="1.17.0",
+                cuda=use_cuda,
+                configure_opts=configure_opts,
             )
         else:
             raise RuntimeError("compiler is not an HPCCM compiler building block!")
@@ -491,10 +494,10 @@ def get_mpi(args, compiler, ucx):
                 mpich_stage += hpccm.building_blocks.python(
                     python3=True, python2=False, devel=False
                 )
-                # Version last updated July 15, 2022
+                # Version last updated August 15, 2024
                 mpich_stage += hpccm.building_blocks.mpich(
                     toolchain=compiler.toolchain,
-                    version="4.0.2",
+                    version="4.2.2",
                     cuda=use_cuda,
                     rocm=use_rocm,
                     ucx=use_ucx,
@@ -520,23 +523,16 @@ def get_mpi(args, compiler, ucx):
 
 
 def get_oneapi_plugins(args):
-    # To get this token, register at https://developer.codeplay.com/ and generate new API token on the "Setting" page.
-    # Then place the toke in this environment variable when building the container.
-    token = os.getenv("CODEPLAY_API_TOKEN")
     blocks = []
 
     def _add_plugin(variant):
         if args.oneapi is None:
             raise RuntimeError("Cannot install oneAPI plugins without oneAPI.")
-        if token is None:
-            raise RuntimeError(
-                "Need CODEPLAY_API_TOKEN env. variable to install oneAPI plugins"
-            )
         backend_version = {"nvidia": args.cuda, "amd": args.rocm}[variant]
         if backend_version.count(".") == 2:
             backend_version = ".".join(backend_version.split(".")[:2])  # 12.0.1 -> 12.0
         oneapi_version = args.oneapi
-        url = f"https://developer.codeplay.com/api/v1/products/download?product=oneapi&version={oneapi_version}&variant={variant}&filters[]=linux&filters[]={backend_version}&aat={token}"
+        url = f"https://developer.codeplay.com/api/v1/products/download?product=oneapi&version={oneapi_version}&variant={variant}&filters[]=linux&filters[]={backend_version}"
         outfile = f"/tmp/oneapi_plugin_{variant}.sh"
         blocks.append(
             hpccm.primitives.shell(
@@ -581,16 +577,27 @@ def get_heffte(args):
         return hpccm.building_blocks.generic_cmake(
             cmake_opts=[
                 "-D CMAKE_BUILD_TYPE=Release",
-                "-D CUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda",
                 "-D Heffte_ENABLE_CUDA=ON",
                 "-D Heffte_ENABLE_FFTW=OFF",
                 "-D BUILD_SHARED_LIBS=ON",
             ],
-            repository="https://bitbucket.org/icl/heffte.git",
+            repository="https://github.com/icl-utk-edu/heffte",
             prefix="/usr/local",
             recursive=True,
             commit=args.heffte,
             directory="heffte",
+        )
+    else:
+        return None
+
+
+def get_plumed(args):
+    if args.plumed is not None:
+        return hpccm.building_blocks.generic_autotools(
+            url="https://github.com/plumed/plumed2/releases/download/v2.9.2/plumed-src-2.9.2.tgz",
+            prefix="/usr/local",
+            runtime_environment={"PLUMED_KERNEL": "/usr/local/lib/libplumedKernel.so"},
+            directory="plumed-2.9.2",
         )
     else:
         return None
@@ -609,15 +616,18 @@ def get_nvhpcsdk(args):
         return None
 
 
-def get_hipsycl(args):
-    if args.hipsycl is None:
+def get_adaptivecpp(args):
+    if args.adaptivecpp is None:
         return None
     if args.rocm is None:
-        raise RuntimeError("hipSYCL requires the ROCm packages")
+        raise RuntimeError("AdaptiveCpp requires the ROCm packages")
     if args.llvm is None:
         # We're using ROCm LLVM in this case, which is not compatible with CUDA
         if args.cuda is not None:
-            raise RuntimeError("Can not build hipSYCL with CUDA and no upstream LLVM")
+            raise RuntimeError(
+                "Can not build AdaptiveCpp with CUDA and no upstream LLVM"
+            )
+    preconfigure = []
 
     if args.llvm is not None:
         cmake_opts = [
@@ -625,6 +635,12 @@ def get_hipsycl(args):
             "-DCMAKE_CXX_COMPILER=clang++-{}".format(args.llvm),
             "-DLLVM_DIR=/usr/lib/llvm-{}/cmake/".format(args.llvm),
         ]
+        if int(args.llvm) >= 18:  # and args.adaptivecpp <= 24.06:
+            preconfigure.append(
+                "ln -s /usr/lib/llvm-{0}/lib/libLLVM-{0}.so /usr/lib/llvm-{0}/lib/libLLVM.so".format(
+                    args.llvm
+                )
+            )
     else:
         cmake_opts = [
             "-DCMAKE_C_COMPILER=/opt/rocm/bin/amdclang",
@@ -646,30 +662,20 @@ def get_hipsycl(args):
             "-DWITH_CUDA_BACKEND=ON",
         ]
 
-    postinstall = [
-        # https://github.com/AdaptiveCpp/AdaptiveCpp/issues/361#issuecomment-718943645
-        'for f in /opt/rocm/amdgcn/bitcode/*.bc; do ln -s "$f" "/opt/rocm/lib/$(basename $f .bc).amdgcn.bc"; done'
-    ]
-    if args.cuda is not None:
-        postinstall += [
-            # https://github.com/AdaptiveCpp/AdaptiveCpp/issues/410#issuecomment-743301929
-            f"sed s/_OPENMP/__OPENMP_NVPTX__/ -i /usr/lib/llvm-{args.llvm}/lib/clang/*/include/__clang_cuda_complex_builtins.h",
-        ]
-
-    hipsycl_version_opts = {}
-    if "." in args.hipsycl:
-        hipsycl_version_opts["branch"] = "v" + args.hipsycl
+    adaptivecpp_version_opts = {}
+    if "." in args.adaptivecpp:
+        adaptivecpp_version_opts["branch"] = "v" + args.adaptivecpp
     else:
-        hipsycl_version_opts["commit"] = args.hipsycl
+        adaptivecpp_version_opts["commit"] = args.adaptivecpp
 
     return hpccm.building_blocks.generic_cmake(
         repository="https://github.com/AdaptiveCpp/AdaptiveCpp.git",
         directory="/var/tmp/AdaptiveCpp",
         prefix="/usr/local",
         recursive=True,
+        preconfigure=preconfigure,
         cmake_opts=["-DCMAKE_BUILD_TYPE=Release", *cmake_opts],
-        postinstall=postinstall,
-        **hipsycl_version_opts,
+        **adaptivecpp_version_opts,
     )
 
 
@@ -818,9 +824,11 @@ def add_oneapi_compiler_build_stage(
     )
     oneapi_stage += hpccm.building_blocks.packages(
         apt_keys=[
-            "https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS-2023.PUB"
+            "https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB"
         ],
-        apt_repositories=["deb https://apt.repos.intel.com/oneapi all main"],
+        apt_repositories=[
+            "deb [signed-by=/usr/share/keyrings/GPG-PUB-KEY-INTEL-SW-PRODUCTS.gpg arch=amd64] https://apt.repos.intel.com/oneapi all main"
+        ],
         # Add minimal packages (not the whole HPC toolkit!)
         ospackages=[
             f"intel-oneapi-dpcpp-cpp-{version}",
@@ -922,12 +930,12 @@ def add_intel_llvm_compiler_build_stage(
         directory="llvm/llvm",
         build=[
             "mkdir -p /var/tmp/llvm/llvm/build",
-            shlex_join(
+            shlex.join(
                 ["python3", "/var/tmp/llvm/buildbot/configure.py", *buildbot_flags]
             ),
             "cd /var/tmp/llvm/llvm/build",
             # Must be called after the configure.py
-            shlex_join(
+            shlex.join(
                 [
                     "cmake",
                     "/var/tmp/llvm/llvm",
@@ -969,7 +977,7 @@ def prepare_venv(version: packaging.version.Version) -> typing.Sequence[str]:
             'black' \
             'breathe' \
             'build' \
-            'cmake>=3.18.4' \
+            'cmake>=3.28' \
             'flake8>=3.7.7' \
             'furo' \
             'gcovr>=4.2' \
@@ -980,7 +988,7 @@ def prepare_venv(version: packaging.version.Version) -> typing.Sequence[str]:
             'numpy>1.7' \
             'packaging' \
             'pip>=10.1' \
-            'pybind11>2.6' \
+            'pybind11>=2.12' \
             'Pygments>=2.2.0' \
             'pytest>=4.6' \
             'python-gitlab' \
@@ -1053,7 +1061,7 @@ def add_python_stages(
         image=base, _distro=hpccm_distro_name(input_args), _as="pyenv"
     )
     python_extra_packages = _python_extra_packages
-    if input_args.ubuntu is not None and input_args.ubuntu == "22.04":
+    if input_args.ubuntu is not None and input_args.ubuntu != "20.04":
         python_extra_packages = [
             i.replace("python-", "python3-") for i in python_extra_packages
         ]
@@ -1115,10 +1123,24 @@ def add_documentation_dependencies(
     """Add appropriate layers according to doxygen input arguments."""
     if input_args.doxygen is None:
         return
+    # In recent python, it's a warning to install via pip into the
+    # system environment, so we use pipx (as recommended).
+    output_stages["main"] += hpccm.building_blocks.packages(ospackages=["pipx"])
     # Always clone the same version of linkchecker (latest release at June 1, 2021)
-    output_stages["main"] += hpccm.building_blocks.pip(
-        pip="pip3",
-        packages=["git+https://github.com/linkchecker/linkchecker.git@v10.0.1"],
+    output_stages["main"] += hpccm.primitives.shell(
+        commands=[
+            # Default linkchecker detects when it is run as root and
+            # unilaterally de-elevates privileges, which means it
+            # can't search its own installation path for files it
+            # needs. Since we are using an ephemeral container, it's
+            # fine to run as root, so we use a version of 10.0.1
+            # hacked to avoid the call to drop_privileges().
+            "pipx install git+https://github.com/mabraham/linkchecker.git@avoid-drop-privileges"
+        ]
+    )
+    # Add the path to which pipx installs binaries to the PATH
+    output_stages["main"] += hpccm.primitives.environment(
+        variables={"PATH": "${PATH}:/root/.local/bin"}
     )
     output_stages["main"] += hpccm.primitives.shell(
         commands=[
@@ -1170,6 +1192,11 @@ def add_base_stage(
     building_blocks["compiler"] = get_compiler(
         input_args, compiler_build_stage=output_stages.get("compiler_build")
     )
+    if args.rocm is not None:
+        building_blocks["rocm"] = [
+            get_rocm_repository(args),
+            hpccm.building_blocks.packages(ospackages=get_rocm_packages(args)),
+        ]
     building_blocks["gdrcopy"] = get_gdrcopy(input_args, building_blocks["compiler"])
     building_blocks["ucx"] = get_ucx(
         input_args, building_blocks["compiler"], building_blocks["gdrcopy"]
@@ -1228,31 +1255,30 @@ def build_stages(args) -> typing.Iterable["hpccm.Stage"]:
     os_packages = (
         list(get_llvm_packages(args))
         + get_opencl_packages(args)
-        + get_rocm_packages(args)
         + get_cp2k_packages(args)
     )
     if args.doxygen is not None:
         os_packages += _docs_extra_packages
     if args.oneapi is not None:
         os_packages += ["lsb-release"]
-    if args.hipsycl is not None:
+    if args.adaptivecpp is not None:
         os_packages += ["libboost-fiber-dev"]
+    if args.hdf5:
+        os_packages += ["libhdf5-dev"]
     building_blocks["extra_packages"] = []
     if args.intel_compute_runtime:
         repo = {
-            "22.04": "deb [arch=amd64] https://repositories.intel.com/graphics/ubuntu jammy arc",
-            "20.04": "deb [arch=amd64] https://repositories.intel.com/graphics/ubuntu focal main",
+            "24.04": "deb [signed-by=/usr/share/keyrings/intel-graphics.gpg arch=amd64] https://repositories.intel.com/graphics/ubuntu noble arc",
+            "22.04": "deb [signed-by=/usr/share/keyrings/intel-graphics.gpg arch=amd64] https://repositories.intel.com/gpu/ubuntu jammy client",
+            "20.04": "deb [signed-by=/usr/share/keyrings/intel-graphics.gpg arch=amd64] https://repositories.intel.com/graphics/ubuntu focal main",
         }
         building_blocks["extra_packages"] += hpccm.building_blocks.packages(
-            apt_keys=["https://repositories.intel.com/graphics/intel-graphics.key"],
+            apt_keys=["https://repositories.intel.com/gpu/intel-graphics.key"],
             apt_repositories=[repo[args.ubuntu]],
         )
         os_packages += _intel_compute_runtime_extra_packages
 
-    if args.rocm is not None:
-        building_blocks["extra_packages"] += get_rocm_repository(args)
-
-    if args.ubuntu is not None and args.ubuntu != "22.04":
+    if args.ubuntu is not None and args.ubuntu == "20.04":
         building_blocks["extra_packages"] += hpccm.building_blocks.packages(
             ospackages=os_packages, apt_ppas=["ppa:intel-opencl/intel-opencl"]
         )
@@ -1287,6 +1313,8 @@ def build_stages(args) -> typing.Iterable["hpccm.Stage"]:
 
     building_blocks["heffte"] = get_heffte(args)
 
+    building_blocks["plumed"] = get_plumed(args)
+
     building_blocks["nvhpcsdk"] = get_nvhpcsdk(args)
     if building_blocks["nvhpcsdk"] is not None:
         nvshmem_lib_path = (
@@ -1298,7 +1326,7 @@ def build_stages(args) -> typing.Iterable["hpccm.Stage"]:
             variables={"LD_LIBRARY_PATH": nvshmem_lib_path}
         )
 
-    building_blocks["hipSYCL"] = get_hipsycl(args)
+    building_blocks["AdaptiveCpp"] = get_adaptivecpp(args)
 
     # Add Python environments to MPI images, only, so we don't have to worry
     # about whether to install mpi4py.

@@ -45,16 +45,22 @@
 
 #include "gromacs/commandline/cmdlineparser.h"
 
+#include <string>
 #include <vector>
 
 #include <gtest/gtest.h>
 
 #include "gromacs/options/basicoptions.h"
 #include "gromacs/options/options.h"
+#include "gromacs/utility/exceptions.h"
 
 #include "testutils/cmdlinetest.h"
 #include "testutils/testasserts.h"
 
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
@@ -260,3 +266,5 @@ TEST_F(CommandLineParserTest, CannotHavePositionalArgumentsAfterOptions)
 }
 
 } // namespace
+} // namespace test
+} // namespace gmx

@@ -49,9 +49,24 @@
 #ifndef NBLIB_LISTEDFORCES_CONVERTGMXTONBLIB_H
 #define NBLIB_LISTEDFORCES_CONVERTGMXTONBLIB_H
 
+#include <cmath>
+#include <cstddef>
+
+#include <algorithm>
+#include <array>
 #include <memory>
+#include <type_traits>
+#include <vector>
 
 #include "listed_forces/conversionscommon.h"
+
+#include "gromacs/topology/idef.h"
+
+#include "nblib/listed_forces/bondtypes.h"
+#include "nblib/listed_forces/definitions.h"
+#include "nblib/particletype.h"
+#include "nblib/util/traits.hpp"
+#include "nblib/util/util.hpp"
 
 namespace nblib
 {
@@ -283,7 +298,8 @@ ListedInteractionData convertToNblibInteractions(const InteractionDefinitions& i
 {
     ListedInteractionData interactions;
 
-    auto transferParamsAndIndices = [&interactionDefinitions](auto& interactionElement) {
+    auto transferParamsAndIndices = [&interactionDefinitions](auto& interactionElement)
+    {
         using InteractionType = typename std::decay_t<decltype(interactionElement)>::type;
 
         if constexpr (Contains<InteractionType, GmxToNblibMapping>{})

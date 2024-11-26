@@ -34,33 +34,47 @@
 #include "gmxpre.h"
 
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
 #include <algorithm>
 #include <array>
+#include <filesystem>
+#include <string>
 #include <vector>
 
+#include "gromacs/commandline/filenm.h"
 #include "gromacs/commandline/pargs.h"
 #include "gromacs/commandline/viewit.h"
 #include "gromacs/fileio/confio.h"
+#include "gromacs/fileio/filetypes.h"
+#include "gromacs/fileio/oenv.h"
 #include "gromacs/fileio/trxio.h"
 #include "gromacs/fileio/xvgr.h"
 #include "gromacs/gmxana/gmx_ana.h"
 #include "gromacs/math/functions.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/pbcutil/rmpbc.h"
+#include "gromacs/topology/atoms.h"
 #include "gromacs/topology/index.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/arraysize.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/cstringutil.h"
+#include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/futil.h"
 #include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/stringutil.h"
+
+struct gmx_output_env_t;
 
 
 static void
@@ -783,23 +797,23 @@ int gmx_mindist(int argc, char* argv[])
         { "-max", FALSE, etBOOL, { &bMax }, "Calculate *maximum* distance instead of minimum" },
         { "-d", FALSE, etREAL, { &rcutoff }, "Distance for contacts" },
         { "-group",
-          FALSE,
-          etBOOL,
-          { &bGroup },
-          "Count contacts with multiple atoms in the first group as one" },
+           FALSE,
+           etBOOL,
+           { &bGroup },
+           "Count contacts with multiple atoms in the first group as one" },
         { "-pi", FALSE, etBOOL, { &bPI }, "Calculate minimum distance with periodic images" },
         { "-split", FALSE, etBOOL, { &bSplit }, "Split graph where time is zero" },
         { "-ng",
-          FALSE,
-          etINT,
-          { &ng },
-          "Number of secondary groups to compute distance to a central group" },
+           FALSE,
+           etINT,
+           { &ng },
+           "Number of secondary groups to compute distance to a central group" },
         { "-pbc", FALSE, etBOOL, { &bPBC }, "Take periodic boundary conditions into account" },
         { "-respertime",
-          FALSE,
-          etBOOL,
-          { &bEachResEachTime },
-          "When writing per-residue distances, write distance for each time point" },
+           FALSE,
+           etBOOL,
+           { &bEachResEachTime },
+           "When writing per-residue distances, write distance for each time point" },
         { "-printresname", FALSE, etBOOL, { &bPrintResName }, "Write residue names" }
     };
     gmx_output_env_t* oenv;

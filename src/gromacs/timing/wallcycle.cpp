@@ -37,9 +37,12 @@
 
 #include "config.h"
 
+#include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 
 #include <array>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
@@ -126,7 +129,6 @@ std::unique_ptr<gmx_wallcycle> wallcycle_init(FILE* fplog, int resetstep, const 
         wc->wcc_all.resize(sc_numWallCycleCountersSquared);
     }
 
-    // NOLINTNEXTLINE(readability-misleading-indentation)
     if constexpr (sc_enableWallcycleDebug)
     {
         wc->isMainRank = (cr == nullptr) || MAIN(cr);
@@ -151,9 +153,25 @@ std::unique_ptr<gmx_wallcycle> wallcycle_init(FILE* fplog, int resetstep, const 
 CLANG_DIAGNOSTIC_RESET
 #endif
 
+std::optional<WallCycleCounter> gmx_wallcycle::registerCycleCounter(const std::string& name)
+{
+    constexpr size_t c_numForceProviderCounters =
+            static_cast<size_t>(WallCycleCounter::ForceProvider4)
+            - static_cast<size_t>(WallCycleCounter::ForceProvider0) + 1;
+
+    if (forceProviderNames.size() >= c_numForceProviderCounters)
+    {
+        return {};
+    }
+
+    forceProviderNames.emplace_back(name);
+
+    return static_cast<WallCycleCounter>(static_cast<size_t>(WallCycleCounter::ForceProvider0)
+                                         + forceProviderNames.size() - 1);
+}
+
 void gmx_wallcycle::checkStart(WallCycleCounter ewc)
 {
-    // NOLINTNEXTLINE(readability-misleading-indentation)
     if constexpr (sc_enableWallcycleDebug)
     {
         // NOLINTNEXTLINE(misc-redundant-expression)
@@ -174,7 +192,6 @@ void gmx_wallcycle::checkStart(WallCycleCounter ewc)
 
 void gmx_wallcycle::checkStop(WallCycleCounter ewc)
 {
-    // NOLINTNEXTLINE(readability-misleading-indentation)
     if constexpr (sc_enableWallcycleDebug)
     {
         if (sc_debugPrintDepth && (!sc_onlyMainDebugPrints || isMainRank))
@@ -210,7 +227,6 @@ void wallcycle_get(gmx_wallcycle* wc, WallCycleCounter ewc, int* n, double* c)
 
 void wallcycle_sub_get(gmx_wallcycle* wc, WallCycleSubCounter ewcs, int* n, double* c)
 {
-    // NOLINTNEXTLINE(readability-misleading-indentation)
     if constexpr (sc_useCycleSubcounters)
     {
         if (wc != nullptr)
@@ -244,7 +260,6 @@ void wallcycle_reset_all(gmx_wallcycle* wc)
         }
     }
 
-    // NOLINTNEXTLINE(readability-misleading-indentation)
     if constexpr (sc_useCycleSubcounters)
     {
         for (auto& counter : wc->wcsc)
@@ -333,7 +348,6 @@ void wallcycle_scale_by_num_threads(gmx_wallcycle* wc, bool isPmeRank, int nthre
             }
         }
     }
-    // NOLINTNEXTLINE(readability-misleading-indentation)
     if constexpr (sc_useCycleSubcounters)
     {
         if (!isPmeRank)
@@ -423,7 +437,6 @@ WallcycleCounts wallcycle_sum(const t_commrec* cr, gmx_wallcycle* wc)
 #endif
         cyclesMain[key] = static_cast<double>(wcc[key].c);
     }
-    // NOLINTNEXTLINE(readability-misleading-indentation)
     if constexpr (sc_useCycleSubcounters)
     {
         for (auto key : keysOf(wc->wcsc))
@@ -447,7 +460,6 @@ WallcycleCounts wallcycle_sum(const t_commrec* cr, gmx_wallcycle* wc)
         double haveInvalidCount = (wc->haveInvalidCount ? 1 : 0);
         // TODO Use MPI_Reduce
         MPI_Allreduce(cyclesMainOnNode.data(), bufMain.data(), bufMain.size(), MPI_DOUBLE, MPI_MAX, cr->mpi_comm_mysim);
-        // NOLINTNEXTLINE(readability-misleading-indentation)
         if constexpr (sc_useCycleSubcounters)
         {
             MPI_Allreduce(cyclesSubOnNode.data(), bufSub.data(), bufSub.size(), MPI_DOUBLE, MPI_MAX, cr->mpi_comm_mysim);
@@ -458,7 +470,6 @@ WallcycleCounts wallcycle_sum(const t_commrec* cr, gmx_wallcycle* wc)
             wcc[key].n = gmx::roundToInt(bufMain[key]);
         }
         wc->haveInvalidCount = (haveInvalidCount > 0);
-        // NOLINTNEXTLINE(readability-misleading-indentation)
         if constexpr (sc_useCycleSubcounters)
         {
             for (auto key : keysOf(wc->wcsc))
@@ -469,7 +480,6 @@ WallcycleCounts wallcycle_sum(const t_commrec* cr, gmx_wallcycle* wc)
 
         // TODO Use MPI_Reduce
         MPI_Allreduce(cyclesMain.data(), cycles_sum.data(), cyclesMain.size(), MPI_DOUBLE, MPI_SUM, cr->mpi_comm_mysim);
-        // NOLINTNEXTLINE(readability-misleading-indentation)
         if constexpr (sc_useCycleSubcounters)
         {
             MPI_Allreduce(cyclesSub.data(),
@@ -509,7 +519,6 @@ WallcycleCounts wallcycle_sum(const t_commrec* cr, gmx_wallcycle* wc)
         {
             cycles_sum[static_cast<int>(key)] = cyclesMain[key];
         }
-        // NOLINTNEXTLINE(readability-misleading-indentation)
         if constexpr (sc_useCycleSubcounters)
         {
             for (auto key : keysOf(cyclesSub))
@@ -751,14 +760,21 @@ void wallcycle_print(FILE*                            fplog,
         {
             /* Print timing information when it is for a PP or PP+PME
                node */
-            print_cycles(fplog,
-                         c2t_pp,
-                         enumValuetoString(*key),
-                         npp,
-                         nth_pp,
-                         wc->wcc[*key].n,
-                         cyc_sum[static_cast<int>(*key)],
-                         tot);
+            const char* name = enumValuetoString(*key);
+            // For active ForceProvider counters we need to look up the counter name
+            if (*key >= WallCycleCounter::ForceProvider0 && *key <= WallCycleCounter::ForceProvider4
+                && wc->wcc[*key].n > 0)
+            {
+                const int index =
+                        static_cast<int>(*key) - static_cast<int>(WallCycleCounter::ForceProvider0);
+                GMX_ASSERT(index < gmx::ssize(wc->forceProviderNames), "index should be in range");
+                if (index < gmx::ssize(wc->forceProviderNames))
+                {
+                    name = wc->forceProviderNames[index].c_str();
+                }
+            }
+            print_cycles(
+                    fplog, c2t_pp, name, npp, nth_pp, wc->wcc[*key].n, cyc_sum[static_cast<int>(*key)], tot);
             tot_for_pp += cyc_sum[static_cast<int>(*key)];
         }
     }
@@ -831,7 +847,6 @@ void wallcycle_print(FILE*                            fplog,
         }
     }
 
-    // NOLINTNEXTLINE(readability-misleading-indentation)
     if constexpr (sc_useCycleSubcounters)
     {
         fprintf(fplog, " Breakdown of PP / PME activities\n");
@@ -848,6 +863,16 @@ void wallcycle_print(FILE*                            fplog,
                          tot);
         }
         fprintf(fplog, "%s\n", hline);
+    }
+
+    if (npme > 0)
+    {
+        fprintf(fplog,
+                " Note that the cycle count and %% columns are weighted by the number of ranks,\n"
+                " while walltimes are not. Hence, with separate PME ranks, the fraction of each\n"
+                " activity's walltime does not correspond to the cycle %%.\n"
+                "%s\n",
+                hline);
     }
 
     /* print GPU timing summary */

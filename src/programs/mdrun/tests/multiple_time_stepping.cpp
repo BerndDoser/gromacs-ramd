@@ -41,12 +41,25 @@
  */
 #include "gmxpre.h"
 
+#include <filesystem>
+#include <string>
+#include <tuple>
+
+#include <gtest/gtest.h>
+
 #include "gromacs/topology/ifunc.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/stringutil.h"
 
 #include "testutils/mpitest.h"
 #include "testutils/setenv.h"
 #include "testutils/simulationdatabase.h"
+#include "testutils/testasserts.h"
+#include "testutils/testfilemanager.h"
+
+#include "programs/mdrun/tests/comparison_helpers.h"
+#include "programs/mdrun/tests/energycomparison.h"
+#include "programs/mdrun/tests/trajectorycomparison.h"
 
 #include "moduletest.h"
 #include "simulatorcomparison.h"
@@ -94,15 +107,15 @@ TEST_P(MtsComparisonTest, WithinTolerances)
     const int numSteps         = 4;
     auto      sharedMdpOptions = gmx::formatString(
             "integrator   = md\n"
-            "dt           = 0.001\n"
-            "nsteps       = %d\n"
-            "verlet-buffer-tolerance = -1\n"
-            "rlist        = 1.0\n"
-            "coulomb-type = %s\n"
-            "vdw-type     = cut-off\n"
-            "rcoulomb     = 0.9\n"
-            "rvdw         = 0.9\n"
-            "constraints  = h-bonds\n",
+                 "dt           = 0.001\n"
+                 "nsteps       = %d\n"
+                 "verlet-buffer-tolerance = -1\n"
+                 "rlist        = 1.0\n"
+                 "coulomb-type = %s\n"
+                 "vdw-type     = cut-off\n"
+                 "rcoulomb     = 0.9\n"
+                 "rvdw         = 0.9\n"
+                 "constraints  = h-bonds\n",
             numSteps,
             isPullTest ? "reaction-field" : "PME");
 

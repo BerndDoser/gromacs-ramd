@@ -42,6 +42,8 @@
 
 #include "gromacs/utility/any.h"
 
+#include <cstdint>
+
 #include <string>
 
 #include "gromacs/utility/gmxassert.h"
@@ -78,6 +80,10 @@ std::string simpleValueToString(const Any& value)
     else if (value.isType<std::string>())
     {
         return value.cast<std::string>();
+    }
+    else if (value.isType<unsigned char>())
+    {
+        return toString(value.cast<unsigned char>());
     }
     GMX_RELEASE_ASSERT(false, "Unknown value type");
     return std::string();

@@ -43,6 +43,8 @@
 #ifndef GMX_MDRUNUTILITY_MDMODULESNOTIFIERS_H
 #define GMX_MDRUNUTILITY_MDMODULESNOTIFIERS_H
 
+#include <cstdint>
+
 #include <optional>
 #include <string>
 #include <vector>
@@ -51,6 +53,8 @@
 #include "gromacs/math/matrix.h"
 #include "gromacs/math/vectypes.h"
 #include "gromacs/mdrunutility/mdmodulesnotifier.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/real.h"
 
 
 struct t_commrec;
@@ -58,6 +62,7 @@ struct gmx_mtop_t;
 class WarningHandler;
 enum class PbcType : int;
 struct t_inputrec;
+struct gmx_multisim_t;
 
 namespace gmx
 {
@@ -71,10 +76,11 @@ class SeparatePmeRanksPermitted;
 struct MDModulesCheckpointReadingDataOnMain;
 struct MDModulesCheckpointReadingBroadcast;
 struct MDModulesWriteCheckpointData;
+enum class StartingBehavior;
 
 /*! \libinternal \brief Notification that atoms may have been redistributed
  *
- * This notification is emitted at the end of the DD (re)partioning
+ * This notification is emitted at the end of the DD (re)partitioning
  * or without DD right after atoms have put into the box.
  * The local atom sets are updated for the new atom order when this signal is emitted.
  * The coordinates of atoms can be shifted by periodic vectors
@@ -184,6 +190,15 @@ struct QMInputFileName
     bool hasQMInputFileName_ = false;
     //! The name of the QM Input file (.inp)
     std::string qmInputFileName_;
+};
+
+/*! \libinternal \brief Notification for the optianal plumed input filename
+ *  provided by user as command-line argument for mdrun
+ */
+struct PlumedInputFilename
+{
+    //! The name of plumed input file, empty by default
+    std::optional<std::string> plumedFilename_{};
 };
 
 /*! \libinternal \brief Provides the constant ensemble temperature
@@ -343,6 +358,7 @@ struct MDModulesNotifiers
      *                              wrote to .tpr files
      * \tparam LocalAtomSetManager* Enables modules to add atom indices to local atom sets
      *                              to be managed
+     * \tparam StartingBehavio&     Provides modules with the starting behavior of the simulation
      * \tparam MDLogger&            Allows MdModule to use standard logging class for messages
      *                              output
      * \tparam gmx_mtop_t&          Provides the topology of the system to the modules
@@ -359,13 +375,25 @@ struct MDModulesNotifiers
      *                              that is used during the simulation
      * \tparam SimulationTimeStep&  Provides modules with the simulation time-step that allows
      *                              them to interconvert between step and time information
+     * \tparam EnsembleTemperature& Provides modules with the (eventual) constant ensemble
+     *                              temperature
      * \tparam t_commrec&           Provides a communicator to the modules during simulation
      *                              setup
+     *
+     * \tparam gmx_multisim_t&      Shares the multisim struct with the modules
+     *                              Subscribing to this notifier will sync checkpointing
+     *                              of simulations and will cause simulations to stop,
+     *                              due to signals or exceededing maximum time, at the same step.
+     *                              This ensures that the output and checkpoints of ensemble
+     *                              simulations are consistent and that ensemble simulations
+     *                              can be continued.
      * \tparam MdRunInputFilename&  Allows modules to know .tpr filename during mdrun
      * \tparam EdrOutputFilename&   Allows modules to know .edr filename during mdrun
+     * \tparam PlumedInputFilename& Allows modules to know the optional .dat filename to be read by plumed
      */
     BuildMDModulesNotifier<const KeyValueTreeObject&,
                            LocalAtomSetManager*,
+                           const StartingBehavior&,
                            const MDLogger&,
                            const gmx_mtop_t&,
                            const MDModulesAtomsRedistributedSignal,
@@ -374,9 +402,12 @@ struct MDModulesNotifiers
                            SeparatePmeRanksPermitted*,
                            const PbcType&,
                            const SimulationTimeStep&,
+                           const EnsembleTemperature&,
                            const t_commrec&,
+                           const gmx_multisim_t*,
                            const MdRunInputFilename&,
-                           const EdrOutputFilename&>::type simulationSetupNotifier_;
+                           const EdrOutputFilename&,
+                           const PlumedInputFilename&>::type simulationSetupNotifier_;
 };
 
 } // namespace gmx

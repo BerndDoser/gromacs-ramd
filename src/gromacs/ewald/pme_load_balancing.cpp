@@ -171,7 +171,7 @@ struct pme_load_balancing_t
     gmx_bool bTriggerOnDLB; /**< trigger balancing only on DD DLB */
     gmx_bool bBalance;      /**< are we in the balancing phase, i.e. trying different setups? */
     int      nstage;        /**< the current maximum number of stages */
-    bool     startupTimeDelayElapsed; /**< Has the c_startupTimeDelay elapsed indicating that the balancing can start. */
+    bool startupTimeDelayElapsed; /**< Has the c_startupTimeDelay elapsed indicating that the balancing can start. */
 
     real                     cut_spacing;        /**< the minimum cutoff / PME grid spacing ratio */
     real                     rcut_vdw;           /**< Vdw cutoff (does not change) */
@@ -205,15 +205,15 @@ bool pme_loadbal_is_active(const pme_load_balancing_t* pme_lb)
 }
 
 // TODO Return a unique_ptr to pme_load_balancing_t
-void pme_loadbal_init(pme_load_balancing_t**     pme_lb_p,
-                      t_commrec*                 cr,
-                      const gmx::MDLogger&       mdlog,
-                      const t_inputrec&          ir,
-                      const matrix               box,
-                      const interaction_const_t& ic,
-                      const nonbonded_verlet_t&  nbv,
-                      gmx_pme_t*                 pmedata,
-                      gmx_bool                   bUseGPU)
+void pme_loadbal_init(pme_load_balancing_t**         pme_lb_p,
+                      t_commrec*                     cr,
+                      const gmx::MDLogger&           mdlog,
+                      const t_inputrec&              ir,
+                      const matrix                   box,
+                      const interaction_const_t&     ic,
+                      const gmx::nonbonded_verlet_t& nbv,
+                      gmx_pme_t*                     pmedata,
+                      gmx_bool                       bUseGPU)
 {
 
     pme_load_balancing_t* pme_lb;
@@ -571,7 +571,7 @@ static void pme_load_balance(pme_load_balancing_t*          pme_lb,
                              gmx::ArrayRef<const gmx::RVec> x,
                              double                         cycles,
                              interaction_const_t*           ic,
-                             struct nonbonded_verlet_t*     nbv,
+                             gmx::nonbonded_verlet_t*       nbv,
                              struct gmx_pme_t**             pmedata,
                              int64_t                        step)
 {
@@ -852,7 +852,7 @@ static void pme_load_balance(pme_load_balancing_t*          pme_lb,
     /* We always re-initialize the tables whether they are used or not */
     init_interaction_const_tables(nullptr, ic, set->rlistOuter, ir.tabext);
 
-    Nbnxm::gpu_pme_loadbal_update_param(nbv, *ic);
+    gmx::gpu_pme_loadbal_update_param(nbv, *ic);
 
     if (!pme_lb->bSepPMERanks)
     {

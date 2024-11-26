@@ -51,7 +51,10 @@
 
 #include "simulationsignal.h"
 
+#include <cstddef>
+
 #include <algorithm>
+#include <iterator>
 
 #include "gromacs/gmxlib/network.h"
 #include "gromacs/mdrunutility/multisim.h"
@@ -68,7 +71,12 @@ SimulationSignaller::SimulationSignaller(SimulationSignals*    signals,
                                          const gmx_multisim_t* ms,
                                          bool                  doInterSim,
                                          bool                  doIntraSim) :
-    signals_(signals), cr_(cr), ms_(ms), doInterSim_(doInterSim), doIntraSim_(doInterSim || doIntraSim), mpiBuffer_{}
+    signals_(signals),
+    cr_(cr),
+    ms_(ms),
+    doInterSim_(doInterSim),
+    doIntraSim_(doInterSim || doIntraSim),
+    mpiBuffer_{}
 {
 }
 

@@ -34,25 +34,39 @@
 #include "gmxpre.h"
 
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
+#include <filesystem>
+#include <string>
 #include <vector>
 
+#include "gromacs/commandline/filenm.h"
 #include "gromacs/commandline/pargs.h"
 #include "gromacs/fileio/confio.h"
+#include "gromacs/fileio/filetypes.h"
+#include "gromacs/fileio/oenv.h"
 #include "gromacs/fileio/trxio.h"
 #include "gromacs/fileio/xvgr.h"
 #include "gromacs/gmxana/gmx_ana.h"
 #include "gromacs/math/functions.h"
 #include "gromacs/math/units.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/pbcutil/rmpbc.h"
+#include "gromacs/topology/atoms.h"
 #include "gromacs/topology/index.h"
 #include "gromacs/topology/topology.h"
 #include "gromacs/trajectory/trajectoryframe.h"
 #include "gromacs/utility/arraysize.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/fatalerror.h"
+#include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
+
+enum class PbcType : int;
+struct gmx_output_env_t;
 
 #define MAX_ENDS 3
 
@@ -215,11 +229,11 @@ int gmx_bundle(int argc, char* argv[])
     static int      n    = 0;
     static gmx_bool bZ   = FALSE;
     t_pargs         pa[] = { { "-na", FALSE, etINT, { &n }, "Number of axes" },
-                     { "-z",
-                       FALSE,
-                       etBOOL,
-                       { &bZ },
-                       "Use the [IT]z[it]-axis as reference instead of the average axis" } };
+                             { "-z",
+                               FALSE,
+                               etBOOL,
+                               { &bZ },
+                               "Use the [IT]z[it]-axis as reference instead of the average axis" } };
     FILE *          flen, *fdist, *fz, *ftilt, *ftiltr, *ftiltl;
     FILE *          fkink = nullptr, *fkinkr = nullptr, *fkinkl = nullptr;
     t_trxstatus*    status;

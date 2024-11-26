@@ -35,6 +35,9 @@
 
 #include "mdsetup.h"
 
+#include <memory>
+#include <vector>
+
 #include "gromacs/domdec/domdec.h"
 #include "gromacs/domdec/domdec_struct.h"
 #include "gromacs/domdec/localtopology.h"
@@ -49,8 +52,10 @@
 #include "gromacs/mdtypes/forcerec.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/interaction_const.h"
+#include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/pbcutil/pbc.h"
+#include "gromacs/topology/idef.h"
 #include "gromacs/topology/mtop_util.h"
 #include "gromacs/topology/topology.h"
 #include "gromacs/utility/arrayref.h"
@@ -102,7 +107,7 @@ void mdAlgorithmsSetupAtomData(const t_commrec*     cr,
     atoms2md(top_global,
              inputrec,
              numAtomIndex,
-             usingDomDec ? cr->dd->globalAtomIndices : std::vector<int>(),
+             usingDomDec ? makeArrayRef(cr->dd->globalAtomIndices) : ArrayRef<int>(),
              numHomeAtoms,
              mdAtoms);
 
@@ -133,9 +138,14 @@ void mdAlgorithmsSetupAtomData(const t_commrec*     cr,
         make_local_shells(cr, *mdatoms, shellfc);
     }
 
+    // TODO: warning/error if posresCom and posresComB do not have the same size
     for (auto& listedForces : fr->listedForces)
     {
-        listedForces.setup(top->idef, fr->natoms_force, fr->listedForcesGpu != nullptr);
+        listedForces.setup(top->idef,
+                           fr->natoms_force,
+                           fr->listedForcesGpu != nullptr,
+                           mdatoms->cVCM,
+                           fr->posresCom.size());
     }
 
     if ((usingPme(fr->ic->eeltype) || usingLJPme(fr->ic->vdwtype)) && (cr->duty & DUTY_PME))

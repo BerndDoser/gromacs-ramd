@@ -43,10 +43,17 @@
 #include "gromacs/math/coordinatetransformation.h"
 
 #include <array>
+#include <string>
+#include <vector>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include "gromacs/math/matrix.h"
+#include "gromacs/math/multidimarray.h"
+#include "gromacs/math/vectypes.h"
+#include "gromacs/mdspan/extents.h"
+#include "gromacs/mdspan/layouts.h"
 #include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/real.h"
 
@@ -66,10 +73,10 @@ protected:
     RVec              identityScale_       = { 1, 1, 1 };
     RVec              identityTranslation_ = { 0, 0, 0 };
     std::vector<RVec> testVectors_         = { { 0, 0, 0 },
-                                       { 1, 0, 0 },
-                                       { 0, -1, -1 },
-                                       { 1e10, 1e1, 1e-2 },
-                                       { 3, -6, 2.5 } };
+                                               { 1, 0, 0 },
+                                               { 0, -1, -1 },
+                                               { 1e10, 1e1, 1e-2 },
+                                               { 3, -6, 2.5 } };
 };
 
 class AffineTransformationTest : public ::testing::Test

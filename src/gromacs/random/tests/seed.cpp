@@ -41,11 +41,16 @@
 
 #include "gromacs/random/seed.h"
 
+#include <cstdint>
+
+#include <string>
+
 #include <gtest/gtest.h>
 
 namespace gmx
 {
-
+namespace test
+{
 namespace
 {
 
@@ -66,5 +71,5 @@ TEST(SeedTest, makeRandomSeed)
 }
 
 } // namespace
-
+} // namespace test
 } // namespace gmx

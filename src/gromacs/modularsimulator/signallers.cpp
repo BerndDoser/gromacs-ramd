@@ -42,10 +42,13 @@
 #include "signallers.h"
 
 #include <algorithm>
+#include <functional>
 
 #include "gromacs/mdlib/stat.h"
 #include "gromacs/mdlib/stophandler.h"
 #include "gromacs/mdrunutility/handlerestart.h"
+#include "gromacs/utility/basedefinitions.h"
+#include "gromacs/utility/gmxassert.h"
 
 #include "modularsimulatorinterfaces.h"
 
@@ -96,8 +99,7 @@ void LastStepSignaller::signal(Step step, Time time)
     {
         return;
     }
-    bool isNSStep           = (step == nextNSStep_);
-    signalledStopCondition_ = stopHandler_->stoppingAfterCurrentStep(isNSStep);
+    signalledStopCondition_ = stopHandler_->stoppingAfterCurrentStep(step);
     if (step == stopStep_ || signalledStopCondition_)
     {
         runAllCallbacks(callbacks_, step, time);

@@ -42,6 +42,11 @@
 
 #include "simulatoralgorithm.h"
 
+#include <algorithm>
+#include <array>
+#include <filesystem>
+#include <iterator>
+
 #include "gromacs/commandline/filenm.h"
 #include "gromacs/domdec/domdec.h"
 #include "gromacs/ewald/pme.h"
@@ -55,25 +60,36 @@
 #include "gromacs/mdlib/md_support.h"
 #include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdlib/resethandler.h"
+#include "gromacs/mdlib/sighandler.h"
 #include "gromacs/mdlib/stat.h"
 #include "gromacs/mdrun/replicaexchange.h"
 #include "gromacs/mdrun/shellfc.h"
 #include "gromacs/mdrunutility/freeenergy.h"
 #include "gromacs/mdrunutility/handlerestart.h"
 #include "gromacs/mdrunutility/printtime.h"
+#include "gromacs/mdtypes/checkpointdata.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/fcdata.h"
 #include "gromacs/mdtypes/forcerec.h"
 #include "gromacs/mdtypes/inputrec.h"
+#include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/mdrunoptions.h"
 #include "gromacs/mdtypes/observableshistory.h"
 #include "gromacs/mdtypes/simulation_workload.h"
+#include "gromacs/modularsimulator/modularsimulatorinterfaces.h"
+#include "gromacs/modularsimulator/signallers.h"
+#include "gromacs/modularsimulator/topologyholder.h"
+#include "gromacs/modularsimulator/trajectoryelement.h"
 #include "gromacs/nbnxm/nbnxm.h"
+#include "gromacs/timing/wallcycle.h"
 #include "gromacs/timing/walltime_accounting.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/fatalerror.h"
+#include "gromacs/utility/logger.h"
+#include "gromacs/utility/real.h"
 
 #include "checkpointhelper.h"
 #include "domdechelper.h"
@@ -85,6 +101,8 @@
 #include "propagator.h"
 #include "referencetemperaturemanager.h"
 #include "statepropagatordata.h"
+
+struct gmx_walltime_accounting;
 
 namespace gmx
 {
@@ -251,9 +269,9 @@ void ModularSimulatorAlgorithm::simulatorTeardown()
     walltime_accounting_set_nsteps_done(wallTimeAccounting_, step_ - inputRec_->init_step);
 }
 
-void ModularSimulatorAlgorithm::preStep(Step step, Time gmx_unused time, bool isNeighborSearchingStep)
+void ModularSimulatorAlgorithm::preStep(Step step, Time gmx_unused time)
 {
-    if (stopHandler_->stoppingAfterCurrentStep(isNeighborSearchingStep) && step != signalHelper_->lastStep_)
+    if (stopHandler_->stoppingAfterCurrentStep(step) && step != signalHelper_->lastStep_)
     {
         /*
          * Stop handler wants to stop after the current step, which was
@@ -273,7 +291,6 @@ void ModularSimulatorAlgorithm::preStep(Step step, Time gmx_unused time, bool is
     // and accept the step as input. Eventually, we want to do that, but currently this would
     // require introducing NeighborSearchSignaller in the legacy do_md or a lot of code
     // duplication.
-    stophandlerIsNSStep_    = isNeighborSearchingStep;
     stophandlerCurrentStep_ = step;
     stopHandler_->setSignal();
 
@@ -330,9 +347,8 @@ void ModularSimulatorAlgorithm::populateTaskQueue()
      * Elements can hence register lambdas capturing their `this` pointers without expecting
      * life time issues, as the task queue and the elements are in the same scope.
      */
-    auto registerRunFunction = [this](SimulatorRunFunction function) {
-        taskQueue_.emplace_back(std::move(function));
-    };
+    auto registerRunFunction = [this](SimulatorRunFunction function)
+    { taskQueue_.emplace_back(std::move(function)); };
 
     Time startTime = inputRec_->init_t;
     Time timeStep  = inputRec_->delta_t;
@@ -360,12 +376,11 @@ void ModularSimulatorAlgorithm::populateTaskQueue()
 
     do
     {
-        // local variables for lambda capturing
-        const int  step     = step_;
-        const bool isNSStep = step == signalHelper_->nextNSStep_;
+        // local variable for lambda capturing
+        const int step = step_;
 
         // register pre-step (task queue is local, so no problem with `this`)
-        registerRunFunction([this, step, time, isNSStep]() { preStep(step, time, isNSStep); });
+        registerRunFunction([this, step, time]() { preStep(step, time); });
         // register pre step functions
         for (const auto& schedulingFunction : preStepScheduling_)
         {
@@ -472,9 +487,8 @@ ModularSimulatorAlgorithmBuilder::ModularSimulatorAlgorithmBuilder(
     auto* statePropagatorDataPtr = statePropagatorData_.get();
     referenceTemperatureManager->registerUpdateCallback(
             [statePropagatorDataPtr](ArrayRef<const real>                temperatures,
-                                     ReferenceTemperatureChangeAlgorithm algorithm) {
-                statePropagatorDataPtr->updateReferenceTemperature(temperatures, algorithm);
-            });
+                                     ReferenceTemperatureChangeAlgorithm algorithm)
+            { statePropagatorDataPtr->updateReferenceTemperature(temperatures, algorithm); });
 }
 
 ModularSimulatorAlgorithm ModularSimulatorAlgorithmBuilder::build()
@@ -525,10 +539,8 @@ ModularSimulatorAlgorithm ModularSimulatorAlgorithmBuilder::build()
             legacySimulatorData_->mdrunOptions_.reproducible,
             globalCommunicationHelper_.nstglobalcomm(),
             legacySimulatorData_->mdrunOptions_.maximumHoursToRun,
-            legacySimulatorData_->inputRec_->nstlist == 0,
             legacySimulatorData_->fpLog_,
             algorithm.stophandlerCurrentStep_,
-            algorithm.stophandlerIsNSStep_,
             legacySimulatorData_->wallTimeAccounting_);
 
     // Build reset handler
@@ -651,7 +663,8 @@ ModularSimulatorAlgorithm ModularSimulatorAlgorithmBuilder::build()
          * a signaller list which is inverse to the build order (and hence equal to
          * the intended call order).
          */
-        auto addSignaller = [this, &algorithm](auto signaller) {
+        auto addSignaller = [this, &algorithm](auto signaller)
+        {
             registerWithInfrastructureAndSignallers(signaller.get());
             algorithm.signallerList_.emplace(algorithm.signallerList_.begin(), std::move(signaller));
         };
@@ -724,9 +737,9 @@ ModularSimulatorAlgorithm ModularSimulatorAlgorithmBuilder::build()
 bool ModularSimulatorAlgorithmBuilder::elementExists(const ISimulatorElement* element) const
 {
     // Check whether element exists in element list
-    if (std::any_of(elements_.begin(), elements_.end(), [element](auto& existingElement) {
-            return element == existingElement.get();
-        }))
+    if (std::any_of(elements_.begin(),
+                    elements_.end(),
+                    [element](auto& existingElement) { return element == existingElement.get(); }))
     {
         return true;
     }
@@ -821,9 +834,8 @@ ReferenceTemperatureCallback ModularSimulatorAlgorithmBuilderHelper::changeRefer
     auto* referenceTemperatureManager =
             simulationData<ReferenceTemperatureManager>("ReferenceTemperatureManager").value();
     return [referenceTemperatureManager](ArrayRef<const real>                temperatures,
-                                         ReferenceTemperatureChangeAlgorithm algorithm) {
-        referenceTemperatureManager->setReferenceTemperature(temperatures, algorithm);
-    };
+                                         ReferenceTemperatureChangeAlgorithm algorithm)
+    { referenceTemperatureManager->setReferenceTemperature(temperatures, algorithm); };
 }
 
 } // namespace gmx

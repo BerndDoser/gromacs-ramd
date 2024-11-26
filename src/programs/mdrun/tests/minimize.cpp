@@ -41,10 +41,14 @@
  */
 #include "gmxpre.h"
 
+#include <cstdio>
+
+#include <filesystem>
 #include <map>
 #include <memory>
 #include <string>
 #include <tuple>
+#include <unordered_map>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -57,10 +61,12 @@
 #include "gromacs/utility/basenetwork.h"
 #include "gromacs/utility/stringutil.h"
 
+#include "testutils/cmdlinetest.h"
 #include "testutils/mpitest.h"
 #include "testutils/refdata.h"
 #include "testutils/simulationdatabase.h"
 #include "testutils/testasserts.h"
+#include "testutils/testfilemanager.h"
 
 #include "energycomparison.h"
 #include "energyreader.h"
@@ -170,8 +176,8 @@ std::vector<std::string> unconstrainedSystemsToTest_g = { "argon12",
 std::vector<std::string> minimizersToTest_g           = { "steep", "cg", "l-bfgs" };
 
 std::vector<std::string> constrainedSystemsToTest_g        = { "tip3p5",
-                                                        "glycine_vacuo",
-                                                        "alanine_vsite_vacuo" };
+                                                               "glycine_vacuo",
+                                                               "alanine_vsite_vacuo" };
 std::vector<std::string> minimizersToTestWithConstraints_g = { "steep", "cg" };
 //! \}
 

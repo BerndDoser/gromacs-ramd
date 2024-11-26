@@ -44,12 +44,16 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
 #include <algorithm>
+#include <filesystem>
 #include <memory>
+#include <vector>
 
 #include "gromacs/applied_forces/awh/awh.h"
 #include "gromacs/commandline/filenm.h"
+#include "gromacs/compat/pointers.h"
 #include "gromacs/domdec/collect.h"
 #include "gromacs/domdec/dlbtiming.h"
 #include "gromacs/domdec/domdec.h"
@@ -61,6 +65,7 @@
 #include "gromacs/essentialdynamics/edsam.h"
 #include "gromacs/ewald/pme_load_balancing.h"
 #include "gromacs/ewald/pme_pp.h"
+#include "gromacs/fileio/enxio.h"
 #include "gromacs/fileio/trxio.h"
 #include "gromacs/gmxlib/network.h"
 #include "gromacs/gmxlib/nrnb.h"
@@ -126,19 +131,27 @@
 #include "gromacs/timing/walltime_accounting.h"
 #include "gromacs/topology/atoms.h"
 #include "gromacs/topology/idef.h"
+#include "gromacs/topology/ifunc.h"
 #include "gromacs/topology/mtop_util.h"
 #include "gromacs/topology/topology.h"
 #include "gromacs/trajectory/trajectoryframe.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/cstringutil.h"
+#include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/fatalerror.h"
+#include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/logger.h"
 #include "gromacs/utility/real.h"
 
 #include "legacysimulator.h"
 #include "replicaexchange.h"
 #include "shellfc.h"
+
+struct gmx_edsam;
+struct gmx_mdoutf;
+struct gmx_shellfc_t;
 
 using gmx::SimulationSignaller;
 using gmx::VirtualSitesHandler;
@@ -155,7 +168,7 @@ static void prepareRerunState(const t_trxframe&          rerunFrame,
                               bool                       constructVsites,
                               const VirtualSitesHandler* vsite)
 {
-    auto x      = makeArrayRef(globalState->x);
+    auto x = makeArrayRef(globalState->x);
     auto rerunX = arrayRefFromArray(reinterpret_cast<gmx::RVec*>(rerunFrame.x), globalState->numAtoms());
     std::copy(rerunX.begin(), rerunX.end(), x.begin());
     copy_mat(rerunFrame.box, globalState->box);
@@ -195,7 +208,7 @@ void gmx::LegacySimulator::do_rerun()
                        "Update groups are not supported with rerun");
 
     SimulationSignals signals;
-    // Most global communnication stages don't propagate mdrun
+    // Most global communication stages don't propagate mdrun
     // signals, and will use this object to achieve that.
     SimulationSignaller nullSignaller(nullptr, nullptr, nullptr, false, false);
 
@@ -242,9 +255,9 @@ void gmx::LegacySimulator::do_rerun()
     {
         gmx_fatal(FARGS, "Multiple simulations not supported by rerun.");
     }
-    if (std::any_of(ir->opts.annealing, ir->opts.annealing + ir->opts.ngtc, [](SimulatedAnnealing i) {
-            return i != SimulatedAnnealing::No;
-        }))
+    if (std::any_of(ir->opts.annealing,
+                    ir->opts.annealing + ir->opts.ngtc,
+                    [](SimulatedAnnealing i) { return i != SimulatedAnnealing::No; }))
     {
         gmx_fatal(FARGS, "Simulated annealing not supported by rerun.");
     }
@@ -499,14 +512,12 @@ void gmx::LegacySimulator::do_rerun()
             compat::not_null<SimulationSignal*>(&signals[eglsSTOPCOND]),
             false,
             MAIN(cr_),
-            ir->nstlist,
+            1, // rerun constructs the pairlist for each frame
             mdrunOptions_.reproducible,
             nstglobalcomm,
             mdrunOptions_.maximumHoursToRun,
-            ir->nstlist == 0,
             fpLog_,
             step,
-            bNS,
             wallTimeAccounting_);
 
     // we don't do counter resetting in rerun - finish will always be valid
@@ -565,7 +576,7 @@ void gmx::LegacySimulator::do_rerun()
             prepareRerunState(rerun_fr, stateGlobal_, constructVsites, virtualSites_);
         }
 
-        isLastStep = isLastStep || stopHandler->stoppingAfterCurrentStep(bNS);
+        isLastStep = isLastStep || stopHandler->stoppingAfterCurrentStep(step);
 
         if (haveDDAtomOrdering(*cr_))
         {

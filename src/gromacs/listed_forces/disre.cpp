@@ -38,11 +38,14 @@
 
 #include "config.h"
 
+#include <climits>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
 
 #include <algorithm>
+#include <filesystem>
+#include <vector>
 
 #include "gromacs/gmxlib/network.h"
 #include "gromacs/math/functions.h"
@@ -56,6 +59,8 @@
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/pbcutil/ishift.h"
 #include "gromacs/pbcutil/pbc.h"
+#include "gromacs/topology/forcefieldparameters.h"
+#include "gromacs/topology/idef.h"
 #include "gromacs/topology/mtop_atomloops.h"
 #include "gromacs/topology/mtop_util.h"
 #include "gromacs/topology/topology.h"
@@ -419,10 +424,10 @@ real ta_disres(int              nfa,
                real gmx_unused  lambda,
                real gmx_unused* dvdlambda,
                gmx::ArrayRef<const real> /*charge*/,
-               t_fcdata gmx_unused* fcd,
-               t_disresdata*        disresdata,
+               t_fcdata gmx_unused*     fcd,
+               t_disresdata*            disresdata,
                t_oriresdata gmx_unused* oriresdata,
-               int gmx_unused* global_atom_index)
+               int gmx_unused*          global_atom_index)
 {
     const real seven_three = 7.0 / 3.0;
 
@@ -473,9 +478,9 @@ real ta_disres(int              nfa,
         if (ip[type].disres.type != 2)
         {
             bConservative = (dr_weighting == DistanceRestraintWeighting::Conservative) && (npair > 1);
-            bMixed        = dr_bMixed;
-            Rt            = gmx::invsixthroot(Rt_6[res]);
-            Rtav          = gmx::invsixthroot(Rtav_6[res]);
+            bMixed = dr_bMixed;
+            Rt     = gmx::invsixthroot(Rt_6[res]);
+            Rtav   = gmx::invsixthroot(Rtav_6[res]);
         }
         else
         {

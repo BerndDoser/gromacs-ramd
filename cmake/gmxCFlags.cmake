@@ -249,6 +249,7 @@ macro (gmx_c_flags)
         if (GMX_COMPILER_WARNINGS)
             GMX_TEST_CFLAG(CFLAGS_WARN "-Wall;-Wno-unused;-Wunused-value;-Wunused-parameter" GMXC_CFLAGS)
             GMX_TEST_CFLAG(CFLAGS_WARN_EXTRA "-Wextra;-Wno-sign-compare;-Wpointer-arith" GMXC_CFLAGS)
+            GMX_TEST_CFLAG(CFLAGS_WARN_PEDANTIC "-Wpedantic" GMXC_CFLAGS)
             GMX_TEST_CFLAG(CFLAGS_WARN_UNDEF "-Wundef" GMXC_CFLAGS)
             GMX_TEST_CFLAG(CFLAGS_WARN_REL "-Wno-array-bounds" GMXC_CFLAGS_RELEASE_ONLY)
             if(CYGWIN)
@@ -273,6 +274,7 @@ macro (gmx_c_flags)
             # Problematic with CUDA
             # GMX_TEST_CXXFLAG(CXXFLAGS_WARN_EFFCXX "-Wnon-virtual-dtor" GMXC_CXXFLAGS)
             GMX_TEST_CXXFLAG(CXXFLAGS_WARN_EXTRA "-Wextra;-Wpointer-arith;-Wmissing-declarations" GMXC_CXXFLAGS)
+            GMX_TEST_CXXFLAG(CXXFLAGS_WARN_PEDANTIC "-Wpedantic" GMXC_CXXFLAGS)
             GMX_TEST_CXXFLAG(CXXFLAGS_WARN_UNDEF "-Wundef" GMXC_CXXFLAGS)
             GMX_TEST_CFLAG(CXXFLAGS_WARN_REL "-Wno-array-bounds" GMXC_CXXFLAGS_RELEASE_ONLY)
             GMX_TEST_CXXFLAG(CXXFLAGS_STRINGOP_TRUNCATION "-Wstringop-truncation" GMXC_CXXFLAGS)
@@ -390,11 +392,11 @@ macro (gmx_c_flags)
         if (GMX_COMPILER_WARNINGS)
             # If used, -Wall should precede other options that silence warnings it enables
             GMX_TEST_CXXFLAG(CXXFLAGS_WARN "-Wall" GMXC_CXXFLAGS)
-            if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "6.0") #LLVM BUG #21629
-                GMX_TEST_CXXFLAG(CXXFLAGS_WARN_NO_BRACES "-Wno-missing-braces" GMXC_CXXFLAGS)
-            endif()
             GMX_TEST_CXXFLAG(CXXFLAGS_WARN_EXTRA "-Wextra;-Wpointer-arith;-Wmissing-prototypes" GMXC_CXXFLAGS)
-            GMX_TEST_CXXFLAG(CXXFLAGS_DEPRECATED "-Wdeprecated" GMXC_CXXFLAGS)
+            GMX_TEST_CXXFLAG(CXXFLAGS_WARN_PEDANTIC "-Wpedantic" GMXC_CXXFLAGS)
+            if(NOT CMAKE_CXX_FLAGS MATCHES "-Wno-deprecated")
+                GMX_TEST_CXXFLAG(CXXFLAGS_DEPRECATED "-Wdeprecated" GMXC_CXXFLAGS)
+            endif()
 
             if (APPLE)
                 # macOS Ventura deprecated `sprintf` in favor of `snprintf`.
@@ -427,13 +429,6 @@ macro (gmx_c_flags)
 
         if (CMAKE_BUILD_TYPE MATCHES "Debug")
             GMX_TEST_CXXFLAG(CXXFLAGS_NO_DEBUG_DISABLES_OPTIMIZATION "-Wno-debug-disables-optimization" GMXC_CXXFLAGS)
-        endif()
-        # Some versions of Intel ICPX compiler (at least 2021.1.1 to 2021.3.0) fail to unroll a loop
-        # in sycl::accessor::__init, and emit -Wpass-failed=transform-warning. This is a useful
-        # warning, but mostly noise right now. Probably related to using shared memory accessors.
-        # Note: not a typo: ICPX 2021.1.1 has GMX_INTEL_LLVM_VERSION 202110; 2021.2.0 has 20210200.
-        if(GMX_INTEL_LLVM AND GMX_INTEL_LLVM_VERSION GREATER_EQUAL 202110)
-            GMX_TEST_CXXFLAG(CXXFLAGS_NO_UNROLL_WARNING "-Wno-pass-failed" GMXC_CXXFLAGS)
         endif()
     endif()
 

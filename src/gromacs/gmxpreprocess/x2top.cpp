@@ -36,11 +36,21 @@
 #include "x2top.h"
 
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
+#include <array>
+#include <filesystem>
+#include <optional>
+#include <string>
+#include <vector>
+
+#include "gromacs/commandline/filenm.h"
 #include "gromacs/commandline/pargs.h"
 #include "gromacs/fileio/confio.h"
+#include "gromacs/fileio/filetypes.h"
 #include "gromacs/fileio/gmxfio.h"
+#include "gromacs/fileio/oenv.h"
 #include "gromacs/gmxpreprocess/gen_ad.h"
 #include "gromacs/gmxpreprocess/gpp_atomtype.h"
 #include "gromacs/gmxpreprocess/grompp_impl.h"
@@ -54,22 +64,32 @@
 #include "gromacs/math/utilities.h"
 #include "gromacs/math/vec.h"
 #include "gromacs/math/vecdump.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/pbcutil/pbc.h"
+#include "gromacs/topology/atoms.h"
+#include "gromacs/topology/ifunc.h"
 #include "gromacs/topology/symtab.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/arraysize.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/filestream.h"
+#include "gromacs/utility/futil.h"
 #include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/logger.h"
 #include "gromacs/utility/loggerbuilder.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
+#include "gromacs/utility/stringutil.h"
 
 #include "hackblock.h"
 
-static bool is_bond(int nnm, t_nm2type nmt[], char* ai, char* aj, real blen)
+struct gmx_output_env_t;
+
+static bool is_bond(int nnm, t_nm2type nmt[], const char* ai, const char* aj, real blen)
 {
     int i, j;
 
@@ -415,35 +435,35 @@ int gmx_x2top(int argc, char* argv[])
     const char*       ff    = "oplsaa";
     t_pargs           pa[]  = {
         { "-ff",
-          FALSE,
-          etSTR,
-          { &ff },
-          "Force field for your simulation. Type \"select\" for interactive selection." },
+                     FALSE,
+                     etSTR,
+                     { &ff },
+                     "Force field for your simulation. Type \"select\" for interactive selection." },
         { "-v", FALSE, etBOOL, { &bVerbose }, "Generate verbose output in the top file." },
         { "-nexcl", FALSE, etINT, { &nrexcl }, "Number of exclusions" },
         { "-H14",
-          FALSE,
-          etBOOL,
-          { &bGenerateHH14Interactions },
-          "Use 3rd neighbour interactions for hydrogen atoms" },
+                     FALSE,
+                     etBOOL,
+                     { &bGenerateHH14Interactions },
+                     "Use 3rd neighbour interactions for hydrogen atoms" },
         { "-alldih",
-          FALSE,
-          etBOOL,
-          { &bKeepAllGeneratedDihedrals },
-          "Generate all proper dihedrals" },
+                     FALSE,
+                     etBOOL,
+                     { &bKeepAllGeneratedDihedrals },
+                     "Generate all proper dihedrals" },
         { "-remdih",
-          FALSE,
-          etBOOL,
-          { &bRemoveDihedralIfWithImproper },
-          "Remove dihedrals on the same bond as an improper" },
+                     FALSE,
+                     etBOOL,
+                     { &bRemoveDihedralIfWithImproper },
+                     "Remove dihedrals on the same bond as an improper" },
         { "-pairs", FALSE, etBOOL, { &bPairs }, "Output 1-4 interactions (pairs) in topology file" },
         { "-name", FALSE, etSTR, { &molnm }, "Name of your molecule" },
         { "-pbc", FALSE, etBOOL, { &bPBC }, "Use periodic boundary conditions." },
         { "-pdbq",
-          FALSE,
-          etBOOL,
-          { &bUsePDBcharge },
-          "Use the B-factor supplied in a [REF].pdb[ref] file for the atomic charges" },
+                     FALSE,
+                     etBOOL,
+                     { &bUsePDBcharge },
+                     "Use the B-factor supplied in a [REF].pdb[ref] file for the atomic charges" },
         { "-param", FALSE, etBOOL, { &bParam }, "Print parameters in the output" },
         { "-round", FALSE, etBOOL, { &bRound }, "Round off measured values" },
         { "-kb", FALSE, etREAL, { &kb }, "Bonded force constant (kJ/mol/nm^2)" },
@@ -527,7 +547,7 @@ int gmx_x2top(int argc, char* argv[])
     GMX_LOG(logger.info)
             .asParagraph()
             .appendTextFormatted("Generating angles and dihedrals from bonds...");
-    gen_pad(atoms, gmx::arrayRefFromArray(&rtp_header_settings, 1), plist, excls, {}, TRUE, {});
+    gen_pad(atoms, gmx::arrayRefFromArray(&rtp_header_settings, 1), plist, excls, {}, TRUE, {}, {});
 
     if (!bPairs)
     {

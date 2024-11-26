@@ -45,13 +45,19 @@
 #ifndef GMX_MDTYPES_IFORCEPROVIDER_H
 #define GMX_MDTYPES_IFORCEPROVIDER_H
 
+#include <cstdint>
+
 #include <memory>
+#include <string>
 
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/real.h"
 
 struct gmx_enerdata_t;
+struct gmx_wallcycle;
 struct t_commrec;
 struct t_forcerec;
 
@@ -186,13 +192,22 @@ protected:
 class ForceProviders
 {
 public:
-    ForceProviders();
+    /*! \brief
+     * Constructor.
+     *
+     * \param[in] wallCycle  Pointer to a wallcycle counter struct, can be nullptr
+     */
+    ForceProviders(gmx_wallcycle* wallCycle = nullptr);
     ~ForceProviders();
 
     /*! \brief
      * Adds a provider.
+     *
+     * \param[in] provider          The force provider callback function
+     * \param[in] cycleCounterName  A non-empty string will add a cycle counter with the given name
+     *                              that registers the time spent in the force provider function
      */
-    void addForceProvider(gmx::IForceProvider* provider);
+    void addForceProvider(gmx::IForceProvider* provider, const std::string& cycleCounterName = "");
 
     //! Whether there are modules added.
     bool hasForceProvider() const;

@@ -37,14 +37,25 @@
 
 #include "config.h"
 
+#include <cinttypes>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
 
 #include <algorithm>
+#include <filesystem>
 #include <numeric>
 #include <string>
+
+#include "gromacs/commandline/filenm.h"
+#include "gromacs/fileio/filetypes.h"
+#include "gromacs/fileio/oenv.h"
+#include "gromacs/math/functions.h"
+#include "gromacs/math/vectypes.h"
+#include "gromacs/utility/basedefinitions.h"
+#include "gromacs/utility/real.h"
 
 #ifdef HAVE_SYS_TIME_H
 #    include <sys/time.h>
@@ -75,6 +86,8 @@
 #include "gromacs/utility/path.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/stringutil.h"
+
+struct gmx_output_env_t;
 
 /* Enum for situations that can occur during log file parsing, the
  * corresponding string entries can be found in do_the_tests() in
@@ -1668,8 +1681,8 @@ static void do_the_tests(FILE*  fp,                    /* General tune_pme outpu
                     break;
                 }
             } /* end of repeats loop */
-        }     /* end of -npme loop */
-    }         /* end of tpr file loop */
+        } /* end of -npme loop */
+    } /* end of tpr file loop */
 
     if (bResetProblem)
     {

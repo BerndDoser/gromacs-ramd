@@ -41,13 +41,18 @@
 
 #include "gromacs/mdlib/energydrifttracker.h"
 
+#include <string>
+
 #include <gtest/gtest.h>
+
+#include "gromacs/utility/real.h"
 
 #include "testutils/testasserts.h"
 
 namespace gmx
 {
-
+namespace test
+{
 namespace
 {
 
@@ -80,5 +85,5 @@ TEST(EnergyDriftTracker, manyPointsWorks)
 }
 
 } // namespace
-
+} // namespace test
 } // namespace gmx

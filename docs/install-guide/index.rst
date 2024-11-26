@@ -73,7 +73,7 @@ As above, and with further details below, but you should consider
 using the following `CMake options`_ with the
 appropriate value instead of ``xxx`` :
 
-* ``-DCMAKE_C_COMPILER=xxx`` equal to the name of the C99 `Compiler`_ you wish to use (or the environment variable ``CC``)
+* ``-DCMAKE_C_COMPILER=xxx`` equal to the name of the C99 `compiler`_ you wish to use (or the environment variable ``CC``)
 * ``-DCMAKE_CXX_COMPILER=xxx`` equal to the name of the C++17 `compiler`_ you wish to use (or the environment variable ``CXX``)
 * ``-DGMX_MPI=on`` to build using `MPI support`_
 * ``-DGMX_GPU=CUDA`` to build with NVIDIA CUDA support enabled.
@@ -119,8 +119,8 @@ You should strive to use the most recent version of your
 compiler. Since we require full C++17 support the minimum
 compiler versions supported by the |Gromacs| team are
 
-* GNU (gcc/libstdc++) 9
-* LLVM (clang/libc++) 7
+* GNU (gcc/libstdc++) |GMX_GCC_MINIMUM_REQUIRED_VERSION|
+* LLVM (clang/libc++) |GMX_CLANG_MINIMUM_REQUIRED_VERSION|
 * Microsoft (MSVC) 2019
 
 Other compilers may work (Cray, Pathscale, older clang) but do
@@ -148,7 +148,7 @@ these will be honored. For configuration of other compilers, read on.
 
 On Linux, the clang compilers typically use for their C++ library
 the libstdc++ which comes with g++. For |Gromacs|, we require
-the compiler to support libstc++ version 7.1 or higher. To select a
+the compiler to support libstc++ version |GMX_GCC_MINIMUM_REQUIRED_VERSION| or higher. To select a
 particular libstdc++ library for a compiler whose default standard
 library does not work, provide the path to g++ with
 ``-DGMX_GPLUSPLUS_PATH=/path/to/g++``. Note that if you then build
@@ -193,9 +193,9 @@ GPU support
 ~~~~~~~~~~~
 
 |Gromacs| has excellent support for NVIDIA GPUs supported via CUDA.
-On Linux, NVIDIA CUDA_ toolkit with minimum version |REQUIRED_CUDA_VERSION|
+On Linux, NVIDIA CUDA_ toolkit with minimum version |GMX_CUDA_MINIMUM_REQUIRED_VERSION|
 is required, and the latest version is strongly encouraged. NVIDIA GPUs with at
-least NVIDIA compute capability |REQUIRED_CUDA_COMPUTE_CAPABILITY| are
+least NVIDIA compute capability |GMX_CUDA_MINIMUM_REQUIRED_COMPUTE_CAPABILITY| are
 required. You are strongly recommended to
 get the latest CUDA version and driver that supports your hardware, but
 beware of possible performance regressions in newer CUDA versions on
@@ -236,6 +236,9 @@ compiler for Intel GPUs, or with AdaptiveCpp_ compiler and ROCm runtime for
 AMD GPUs (GFX9, CDNA 1/2, and RDNA1/2/3). Using other devices supported by
 these compilers is possible, but not recommended. Notably, SSCP/generic mode
 of AdaptiveCpp_ is not supported.
+
+Starting with |Gromacs| 2025, AMD-HIP_ support has been added for running the main
+non-bonded kernels on AMD devices.
 
 It is not possible to configure several GPU backends in the same build
 of |Gromacs|.
@@ -387,13 +390,13 @@ Using oneMKL Interface Library
 The oneMKL interface library enables the SYCL backend for |Gromacs| with cuFFT, rocFFT,
 or closed-source oneMKL using Intel DPC++ and Codeplay's plugins for NVIDIA and AMD GPUs.
 To use, Intel DPC++ must be installed (>= 2023.2.0), along with Codeplay's plugins for NVIDIA
-and AMD GPUs as required, and CUDA and/or ROCm as required. The enviroment should be initialized
-with as with the MKL instructions above.
+and AMD GPUs as required, and CUDA and/or ROCm as required. The environment should be initialized
+as with the MKL instructions above.
 
 To use the oneMKL interface library, download, build and install oneMKL as directed in the
-[oneMKL documentation](https://oneapi-src.github.io/oneMKL/building_the_project.html#building-for-onemkl),
+`oneMKL documentation <https://oneapi-src.github.io/oneMKL/building_the_project.html#building-for-onemkl>`_,
 making sure that
-[suitable DFT backends](https://github.com/oneapi-src/oneMKL/blob/develop/CMakeLists.txt#supported-configurations)
+`suitable DFT backends <https://github.com/oneapi-src/oneMKL/blob/develop/CMakeLists.txt#supported-configurations>`_
 are enabled.
 Then, when building |Gromacs|, set ``-DGMX_GPU_FFT_LIBRARY=ONEMKL``.
 
@@ -409,7 +412,8 @@ very large FFT sizes in |Gromacs|.
 
 ::
 
-     cmake -DGMX_GPU_FFT_LIBRARY=BBFFT -DCMAKE_PREFIX_PATH=$PATH_TO_BBFFT_INSTALL
+     cmake -DGMX_GPU_FFT_LIBRARY=BBFFT \
+           -DCMAKE_PREFIX_PATH=$PATH_TO_BBFFT_INSTALL
 
 Note: in |Gromacs| 2023, the option was called ``DBFFT``.
 
@@ -466,7 +470,7 @@ updating the LD_LIBRARY_PATH environment variable as follows:
 ::
 
     export LD_LIBRARY_PATH=<path to compatible NVSHMEM folder>/lib:$LD_LIBRARY_PATH
-	  
+
 It is advisable to refer to the `NVSHMEM FAQ page
 <https://docs.nvidia.com/hpc-sdk/nvshmem/api/faq.html#general-faqs>`_ for
 any issues faced at runtime.
@@ -515,6 +519,7 @@ and performance improvements. VkFFT can be used with OpenCL and SYCL backends:
   the default on macOS and when building with Visual Studio. On other platforms
   it is not extensively tested, but it likely outperforms ClFFT and can be enabled
   during cmake configuration.
+* For AMD-HIP_, VkFFT is the default FFT backend, as it supports both consumer and data center hardware.
 
 To enable VkFFT support, use the following CMake option:
 
@@ -556,7 +561,7 @@ Other optional build components
   external lmfit library, set ``-DGMX_USE_LMFIT=external``, and adjust
   ``CMAKE_PREFIX_PATH`` as needed.  lmfit support can be disabled with
   ``-DGMX_USE_LMFIT=none``.
-* zlib is used by TNG for compressing some kinds of trajectory data
+* zlib is used by TNG for compressing some kinds of trajectory data.
 * Building the |Gromacs| documentation is optional, and requires
   and other software.
   Refer to https://manual.gromacs.org/current/dev-manual/documentation-generation.html
@@ -603,7 +608,7 @@ and use
 
 .. parsed-literal::
 
-    tar xfz gromacs-|version|.tgz
+    tar xzf gromacs-|version|.tgz
     cd gromacs-|version|
     mkdir build-gromacs
     cd build-gromacs
@@ -688,7 +693,8 @@ For example, the following command line
 
 ::
 
-    cmake .. -DGMX_GPU=CUDA -DGMX_MPI=ON -DCMAKE_INSTALL_PREFIX=/home/marydoe/programs
+    cmake .. -DGMX_GPU=CUDA -DGMX_MPI=ON \
+             -DCMAKE_INSTALL_PREFIX=/home/marydoe/programs
 
 can be used to build with CUDA GPUs, MPI and install in a custom
 location. You can even save that in a shell script to make it even
@@ -743,7 +749,7 @@ lead to performance loss, e.g. on Intel Skylake-X/SP and AMD Zen (first generati
    While these microarchitectures do support 256-bit AVX2 instructions,
    hence ``AVX2_256`` is also supported, 128-bit will generally be faster,
    in particular when the non-bonded tasks run on the CPU -- hence
-   the default ``AVX2_128``. With GPU offload however ``AVX2_256``
+   the default ``AVX2_128``. With GPU offload, however, ``AVX2_256``
    can be faster on Zen processors.
 7. ``AVX2_256`` Present on Intel Haswell (and later) processors (2013)
    and AMD Zen3 and later (2020);
@@ -792,8 +798,8 @@ an architecture with SIMD support to which |Gromacs| has not yet been
 ported, you may wish to try this option instead of the default
 ``GMX_SIMD=None``, as it can often out-perform this when the
 auto-vectorization in your compiler does a good job. And post on the
-|Gromacs| `user discussion forum`_, because |Gromacs| can probably be ported for new
-SIMD architectures in a few days.
+|Gromacs| `user discussion forum`_, because |Gromacs| can probably be ported
+to new SIMD architectures in a few days.
 
 CMake advanced options
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -811,7 +817,7 @@ visible or not according to whether their preconditions are satisfied.
 Helping CMake find the right libraries, headers, or programs
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If libraries are installed in non-default locations their location can
+If libraries are installed in non-default locations, their location can
 be specified using the following variables:
 
 * ``CMAKE_INCLUDE_PATH`` for header files
@@ -837,7 +843,7 @@ for indicating to ``cmake`` which compilers to use. Similarly,
 ``CFLAGS``/``CXXFLAGS`` can be used to pass compiler
 options, but note that these will be appended to those set by
 |Gromacs| for your build platform and build type. You can customize
-some of this with advanced CMake options such as ``CMAKE_C_FLAGS``
+some of this with advanced CMake options, such as ``CMAKE_C_FLAGS``
 and its relatives.
 
 See also the page on `CMake environment variables`_.
@@ -866,8 +872,9 @@ binary size and build time, you can alter the target CUDA architectures.
 This can be done either with the ``GMX_CUDA_TARGET_SM`` or
 ``GMX_CUDA_TARGET_COMPUTE`` CMake variables, which take a semicolon delimited
 string with the two digit suffixes of CUDA (virtual) architectures names, for
-instance "60;75;86". For details, see the "Options for steering GPU
-code generation" section of the nvcc documentation / man page.
+instance "60;75;86". For details, see the `"Options for steering GPU
+code generation" section of the nvcc documentation
+<https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/#options-for-steering-cuda-compilation>`_.
 
 The GPU acceleration has been tested on AMD64/x86-64 platforms with
 Linux, Mac OS X and Windows operating systems, but Linux is the
@@ -937,7 +944,8 @@ external library, use
 
 ::
 
-    cmake .. -DGMX_GPU=OpenCL -DclFFT_ROOT_DIR=/path/to/your/clFFT -DGMX_EXTERNAL_CLFFT=TRUE
+    cmake .. -DGMX_GPU=OpenCL -DclFFT_ROOT_DIR=/path/to/your/clFFT \
+             -DGMX_EXTERNAL_CLFFT=TRUE
 
 On Windows with MSVC and on macOS,  `VkFFT <https://github.com/DTolm/VkFFT>`_
 is used instead of clFFT, but this can provide performance benefits on
@@ -991,7 +999,9 @@ SYCL GPU acceleration for Intel GPUs
 """"""""""""""""""""""""""""""""""""
 
 You should install the recent `Intel oneAPI DPC++`_ compiler toolkit.
-For |Gromacs| 2024, version 2023.2 is recommended, and 2023.0 is the earliest supported.
+For |Gromacs| 2024, oneAPI version 2023.2 or 2024.0 are tested regularly and are
+recommended, although later versions might work and can offer better performance.
+The earliest supported version is oneAPI 2023.0.
 Using open-source `Intel LLVM <https://github.com/intel/llvm>`_ is possible,
 but not extensively tested. We also recommend installing the most recent
 `Neo driver <https://github.com/intel/compute-runtime/releases>`_.
@@ -1003,7 +1013,8 @@ must be set:
 
 ::
 
-   cmake .. -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DGMX_GPU=SYCL -DGMX_SYCL=DPCPP
+   cmake .. -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx \
+            -DGMX_GPU=SYCL -DGMX_SYCL=DPCPP
 
 When compiling for Intel Data Center GPU Max (also knows as Ponte Vecchio / PVC),
 we recommend passing additional flags for compatibility and improved performance:
@@ -1094,6 +1105,48 @@ The following flags can be passed to CMake in order to tune |Gromacs|:
      This option is automatically enabled in all builds that target GCN or CDNA GPUs (but not RDNA).
 
 
+.. _AMD-HIP:
+
+AMD HIP GPU acceleration
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+HIP is the AMD interoperability layer for the `ROCm`_ toolkit used to target AMD devices.
+
+In |Gromacs| 2025 there is only limited support for using HIP as the device backend for AMD devices,
+with only NBNxM kernels offload being available.
+
+Build instructions
+""""""""""""""""""""""""""""""
+
+In order to use HIP as the device backend, you need to have the `ROCm`_ toolkit installed, including
+the `rocPrim`_ libraries. The minimum version required by |Gromacs| is ROCm 5.2, but we recommend a
+recent version to take advantage of library improvements.
+
+You can then configure the build like this
+
+::
+
+   cmake .. -DCMAKE_HIP_COMPILER=${ROCM_PATH}/bin/amdclang++ \
+            -DCMAKE_PREFIX_PATH=${ROCM_PATH} \
+            -DGMX_GPU=HIP
+
+By default |Gromacs| will generate code for a range of different CDNA devices. In case you want to
+narrow the scope of the code generation, or want to target RDNA or GCN devices, you can specify the
+architectures using this flag
+
+``-DGMX_HIP_TARGET_ARCH=gfxXYZ,gfxABCD``
+
+When detecting a 64-wide execution architecture and no 32-wide versions, |Gromacs| will automatically
+configure with
+
+``-DGMX_GPU_NB_DISABLE_CLUSTER_PAIR_SPLIT=ON``
+
+to improve performance on those devices. In case any 32-wide architectures are present, the maximum
+execution width will be restricted to be 32-wide, even on devices that support 64-wide execution.
+
+When |Gromacs| is built with explicit 64-wide execution (and conflicting support for 32-wide devices),
+any 32-wide devices detected will be not be used.
+
 Static linking
 ~~~~~~~~~~~~~~
 
@@ -1159,7 +1212,7 @@ can be selected when using AdaptiveCpp_ (i.e. only AMD or only NVIDIA).
 The SSCP/generic compilation mode of AdaptiveCpp_ is currently
 not supported.
 With OpenCL_, due to just-in-time compilation of GPU code for
-the device in use this is not a concern.
+the device in use, this is not a concern.
 
 Linear algebra libraries
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1200,7 +1253,7 @@ MiMiC library is added to CMAKE_PREFIX_PATH if it is installed in
 non-standard location. Building QM/MM-capable version requires
 double-precision version of |Gromacs| compiled with MPI support:
 
-* ``-DGMX_DOUBLE=ON -DGMX_MPI -DGMX_MIMIC=ON``
+* ``-DGMX_DOUBLE=ON -DGMX_MPI=ON -DGMX_MIMIC=ON``
 
 .. _installing with CP2K:
 
@@ -1211,43 +1264,44 @@ CP2K QM/MM interface integration will require linking against libcp2k
 library, that incorporates CP2K functionality into |Gromacs|.
 
 1. Download, compile and install CP2K (version 8.1 or higher is required).
-CP2K latest distribution can be downloaded `here <https://github.com/cp2k/cp2k/releases/>`_.
-For CP2K specific instructions please `follow <https://github.com/cp2k/cp2k/blob/master/INSTALL.md>`_.
-You can also check instructions on the `official CP2K web-page <https://www.cp2k.org/howto>`_.
+   CP2K latest distribution can be downloaded `here <https://github.com/cp2k/cp2k/releases/>`_.
+   For CP2K specific instructions, please `follow <https://github.com/cp2k/cp2k/blob/master/INSTALL.md>`_.
+   You can also check instructions on the `official CP2K web-page <https://www.cp2k.org/howto>`_.
 
 2. Make :file:`libcp2k.a` library by executing the following command::
+
     make ARCH=<your arch file> VERSION=<your version like psmp> libcp2k
 
-The library archive (*e.g.* :file:`libcp2k.a`) should appear in the :file:`{<cp2k dir>}/lib/{<arch>}/{<version>}/` directory.
+   The library archive (*e.g.* :file:`libcp2k.a`) should appear in the :file:`{<cp2k dir>}/lib/{<arch>}/{<version>}/` directory.
 
-3. Configure |Gromacs| with :command:`cmake`, adding the following flags.
+3. Configure |Gromacs| with :command:`cmake`, adding the following flags:
 
-Build should be static: ``-DBUILD_SHARED_LIBS=OFF -DGMXAPI=OFF -DGMX_INSTALL_NBLIB_API=OFF``
+   Build should be static: ``-DBUILD_SHARED_LIBS=OFF -DGMXAPI=OFF -DGMX_INSTALL_NBLIB_API=OFF``
 
-Double precision in general is better than single for QM/MM
-(however both options are viable): ``-DGMX_DOUBLE=ON``
+   Double precision in general is better than single for QM/MM
+   (however both options are viable): ``-DGMX_DOUBLE=ON``
 
-FFT, BLAS and LAPACK libraries should be the same between CP2K and |Gromacs|.
-Use the following flags to do so:
+   FFT, BLAS and LAPACK libraries should be the same between CP2K and |Gromacs|.
+   Use the following flags to do so:
 
-* ``-DGMX_FFT_LIBRARY=<your library like fftw3> -DFFTWF_LIBRARY=<path to library> -DFFTWF_INCLUDE_DIR=<path to directory with headers>``
-* ``-DGMX_BLAS_USER=<path to your BLAS>``
-* ``-DGMX_LAPACK_USER=<path to your LAPACK>``
+   * ``-DGMX_FFT_LIBRARY=<your library like fftw3> -DFFTWF_LIBRARY=<path to library> -DFFTWF_INCLUDE_DIR=<path to directory with headers>``
+   * ``-DGMX_BLAS_USER=<path to your BLAS>``
+   * ``-DGMX_LAPACK_USER=<path to your LAPACK>``
 
-4. Compilation of QM/MM interface is controled by the following flags.
+4. Compilation of QM/MM interface is controled by the following flags:
 
-``-DGMX_CP2K=ON``
-    Activates QM/MM interface compilation
-``-DCP2K_DIR="<path to cp2k>/lib/local/psmp``
-    Directory with libcp2k.a library
-``-DCP2K_LINKER_FLAGS="<combination of LDFLAGS and LIBS>"`` (optional for CP2K 9.1 or newer)
-    Other libraries used by CP2K. Typically that should be combination
-    of LDFLAGS and LIBS from the ARCH file used for CP2K compilation.
-    Sometimes ARCH file could have several lines defining LDFLAGS and LIBS
-    or even split one line into several using "\\". In that case all of them
-    should be concatenated into one long string without any extra slashes
-    or quotes. For CP2K versions 9.1 or newer, CP2K_LINKER_FLAGS is not required
-    but still might be used in very specific situations.
+   ``-DGMX_CP2K=ON``
+       Activates QM/MM interface compilation
+   ``-DCP2K_DIR="<path to cp2k>/lib/local/psmp``
+       Directory with libcp2k.a library
+   ``-DCP2K_LINKER_FLAGS="<combination of LDFLAGS and LIBS>"`` (optional for CP2K 9.1 or newer)
+       Other libraries used by CP2K. Typically that should be combination
+       of LDFLAGS and LIBS from the ARCH file used for CP2K compilation.
+       Sometimes ARCH file could have several lines defining LDFLAGS and LIBS
+       or even split one line into several using "\\". In that case all of them
+       should be concatenated into one long string without any extra slashes
+       or quotes. For CP2K versions 9.1 or newer, CP2K_LINKER_FLAGS is not required
+       but still might be used in very specific situations.
 
 .. _installing with Colvars:
 
@@ -1260,7 +1314,45 @@ enabled by default when building |Gromacs|.  This behavior may also be
 enabled explicitly with ``-DGMX_USE_COLVARS=internal``.  Alternatively,
 Colvars support may be disabled with ``-DGMX_USE_COLVARS=none``.  How to use
 Colvars in a |Gromacs| simulation is described in the User Guide, as well as
-in the `Colvars documentation <https://colvars.github.io/gromacs-2024/colvars-refman-gromacs.html>`_.
+in the `Colvars documentation <https://colvars.github.io/gromacs-2025/colvars-refman-gromacs.html>`_.
+
+.. _installing with PLUMED:
+
+Building with PLUMED support
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+|Gromacs| bundles the interface from version 2.10 of the `PLUMED library <https://www.plumed.org/>`_
+in its source distribution. The interface is compatible with any PLUMED version. 
+The interface is enabled by default with |Gromacs|
+unless |Gromacs| is built on Windows. You can explicitly enable the 
+interface with ``-DGMX_USE_PLUMED=ON`` or deactivate it with ``-DGMX_USE_PLUMED=OFF``.
+By default the option is set to ``AUTO``, during the configuration CMake will try
+to activate PLUMED and in case it does not succeed it will output a "soft" warning.
+If the user forces the option ``ON``, when PLUMED cannot be activated the configuration
+will fail with an error message.
+The User Guide contains the instructions on how to use PLUMED in a |Gromacs| simulation. 
+
+.. _installing with Neural Network potential support:
+
+Building with Neural Network potential support
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To build |Gromacs| with support for Neural Network potentials, it has to be compiled 
+with a suitable machine learning library. At the moment, only models trained in
+`Pytorch <https://pytorch.org/>`_ are supported. To be able to load them in |Gromacs|,
+it has to be built with the Pytorch C++ API or LibTorch, which can be downloaded
+from the `Pytorch website <https://pytorch.org/get-started/locally/>`_. 
+The NNP interface is enabled by default when a LibTorch installation is found in the
+``CMAKE_PREFIX_PATH``, or ``Torch_DIR`` is set to a ``TorchConfig.cmake`` or 
+``torch-config.cmake`` usually found under ``share/cmake/Torch/`` in the libtorch 
+installation directory. It may also be explicitly enabled with ``-DGMX_NNPOT=TORCH``
+or disabled with ``-DGMX_NNPOT=OFF``.
+
+In addition, |Gromacs| provides support to specify custom `Pytorch extensions
+<https://pytorch.org/tutorials/advanced/cpp_extension.html>`_ at build time that may
+be used by the NNP model. The path to the extension library may be specified via the
+``TORCH_EXTENSION_PATH`` variable. Note that CMake will search for a file called
+``libtorch_extension.so`` in the specified directory.
 
 .. _suffixes:
 
@@ -1282,7 +1374,8 @@ programs and libraries, one might specify:
 
 ::
 
-    cmake .. -DGMX_DEFAULT_SUFFIX=OFF -DGMX_BINARY_SUFFIX=_mod -DGMX_LIBS_SUFFIX=_mod
+    cmake .. -DGMX_DEFAULT_SUFFIX=OFF -DGMX_BINARY_SUFFIX=_mod \
+             -DGMX_LIBS_SUFFIX=_mod
 
 Thus the names of all programs and libraries will be appended with
 ``_mod``.
@@ -1433,10 +1526,10 @@ inside the regression tests folder. You can find more options
 Hopefully, you will get a report that all tests have passed. If there
 are individual failed tests it could be a sign of a compiler bug, or
 that a tolerance is just a tiny bit too tight. Check the output files
-the script directs you too, and try a different or newer compiler if
+the script directs you to, and try a different or newer compiler if
 the errors appear to be real. If you cannot get it to pass the
 regression tests, you might try dropping a line to the
-|Gromacs| `users forum <https://gromacs.bioexcel.eu/c/gromacs-user-forum>`__,
+|Gromacs| `user discussion forum`_,
 but then you should include a detailed description of
 your hardware, and the output of ``gmx mdrun -version`` (which contains
 valuable diagnostic information in the header).
@@ -1547,7 +1640,7 @@ With the graphical user interface, you will be asked about what
 compilers to use at the initial configuration stage, and if you use
 the command line they can be set in a similar way as under UNIX.
 
-Unfortunately ``-DGMX_BUILD_OWN_FFTW=ON`` (see `Using FFTW`_) does not
+Unfortunately, ``-DGMX_BUILD_OWN_FFTW=ON`` (see `Using FFTW`_) does not
 work on Windows, because there is no supported way to build FFTW on
 Windows. You can either build FFTW some other way (e.g. MinGW), or
 use the built-in fftpack (which may be slow), or `using MKL`_.
@@ -1616,13 +1709,16 @@ much everywhere, it is important that we tell you where we really know
 it works because we have tested it.
 Every commit in our git source code repository
 is currently tested with a range of configuration options on x86 with
-gcc versions including 9 and 12,
-clang versions including 9 and 15,
-CUDA versions 11.0 and 11.7,
-hipSYCL 0.9.4 with ROCm 5.3,
+gcc versions 11-14,
+clang versions including 14, 18, and 19,
+CUDA versions 12.1, 12.5.1, and 12.6,
+nvcxx version 24.7
+HIP version 5.7.1 and 6.2.2
+AdaptiveCPP 23.10 and 24.02 with ROCm 5.7.1 and 6.2 (respectively),
 and
-a version of oneAPI containing Intel's clang-based compiler.
-For this testing, we use Ubuntu 20.04 operating system.
+oneAPI version 2024.0 and 2024.2 (including CUDA 12.0.1 and ROCm 6.1.3 backends) .
+
+For this testing, we use Ubuntu 22.04 and 24.04 operating systems.
 Other compiler, library, and OS versions are tested less frequently.
 For details, you can have a look at the
 `continuous integration server used by the GitLab project <https://gitlab.com/gromacs/gromacs/>`_,

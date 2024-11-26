@@ -42,6 +42,10 @@
 
 #include "gromacs/applied_forces/colvars/colvarsforceprovider.h"
 
+#include <array>
+#include <filesystem>
+#include <map>
+#include <string>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -52,16 +56,23 @@
 #include "gromacs/gmxpreprocess/grompp.h"
 #include "gromacs/math/paddedvector.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/mdlib/forcerec.h"
+#include "gromacs/mdrunutility/multisim.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/enerdata.h"
 #include "gromacs/mdtypes/forceoutput.h"
 #include "gromacs/mdtypes/iforceprovider.h"
 #include "gromacs/pbcutil/pbc.h"
+#include "gromacs/topology/atoms.h"
+#include "gromacs/topology/ifunc.h"
 #include "gromacs/topology/mtop_lookup.h"
 #include "gromacs/topology/mtop_util.h"
 #include "gromacs/topology/topology.h"
 #include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/logger.h"
+#include "gromacs/utility/real.h"
+#include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/textreader.h"
 #include "gromacs/utility/textwriter.h"
 
@@ -69,6 +80,8 @@
 #include "testutils/refdata.h"
 #include "testutils/testasserts.h"
 #include "testutils/testfilemanager.h"
+
+enum class PbcType : int;
 
 namespace gmx
 {
@@ -190,6 +203,7 @@ TEST_F(ColvarsForceProviderTest, CanConstructOrNot)
                                                        seed_,
                                                        &atomSetManager_,
                                                        &cr_,
+                                                       nullptr,
                                                        simulationTimeStep_,
                                                        atomCoords_,
                                                        prefixOutput_,
@@ -215,6 +229,7 @@ TEST_F(ColvarsForceProviderTest, SimpleInputs)
                                        seed_,
                                        &atomSetManager_,
                                        &cr_,
+                                       nullptr,
                                        simulationTimeStep_,
                                        atomCoords_,
                                        prefixOutput_,
@@ -222,7 +237,8 @@ TEST_F(ColvarsForceProviderTest, SimpleInputs)
 
 
     // Re-use the PreProcessorTest since the ForceProvider recalls colvars initilization and the input are identicals.
-    gmx::test::TestReferenceData    data("ColvarsPreProcessorTest_CheckValuesFourWaters.xml");
+    gmx::test::TestReferenceData data(
+            std::filesystem::path{ "ColvarsPreProcessorTest_CheckValuesFourWaters.xml" });
     gmx::test::TestReferenceChecker checker(data.rootChecker());
 
     // Check colvars & atoms values are correctly read
@@ -276,6 +292,7 @@ TEST_F(ColvarsForceProviderTest, WrongColvarsInput)
                                                         seed_,
                                                         &atomSetManager_,
                                                         &cr_,
+                                                        nullptr,
                                                         simulationTimeStep_,
                                                         atomCoords_,
                                                         prefixOutput_,
@@ -315,6 +332,7 @@ TEST_F(ColvarsForceProviderTest, CalculateForces4water)
                                        seed_,
                                        &atomSetManager_,
                                        &cr_,
+                                       nullptr,
                                        simulationTimeStep_,
                                        atomCoords_,
                                        prefixOutput_,
@@ -359,6 +377,7 @@ TEST_F(ColvarsForceProviderTest, CalculateForcesAlanine)
                                        seed_,
                                        &atomSetManager_,
                                        &cr_,
+                                       nullptr,
                                        simulationTimeStep_,
                                        atomCoords_,
                                        prefixOutput_,

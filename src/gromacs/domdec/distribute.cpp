@@ -45,18 +45,31 @@
 
 #include "config.h"
 
+#include <cmath>
+#include <cstdio>
+
+#include <algorithm>
+#include <memory>
 #include <vector>
 
 #include "gromacs/domdec/domdec_network.h"
+#include "gromacs/domdec/domdec_struct.h"
+#include "gromacs/math/functions.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/df_history.h"
+#include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/pbcutil/pbc.h"
+#include "gromacs/topology/block.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/fatalerror.h"
+#include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/logger.h"
+#include "gromacs/utility/real.h"
 
 #include "atomdistribution.h"
 #include "cellsizes.h"
@@ -177,7 +190,8 @@ void dd_distribute_dfhist(gmx_domdec_t* dd, df_history_t* dfhist)
     if (dfhist->nlambda > 0)
     {
         int nlam = dfhist->nlambda;
-        dd_bcast(dd, sizeof(int) * nlam, dfhist->n_at_lam);
+        dd_bcast(dd, sizeof(int) * nlam, dfhist->numSamplesAtLambdaForStatistics);
+        dd_bcast(dd, sizeof(int) * nlam, dfhist->numSamplesAtLambdaForEquilibration);
         dd_bcast(dd, sizeof(real) * nlam, dfhist->wl_histo);
         dd_bcast(dd, sizeof(real) * nlam, dfhist->sum_weights);
         dd_bcast(dd, sizeof(real) * nlam, dfhist->sum_dg);
@@ -409,8 +423,7 @@ static std::vector<std::vector<int>> getAtomGroupDistribution(const gmx::MDLogge
     matrix triclinicCorrectionMatrix;
     make_tric_corr_matrix(dd->unitCellInfo.npbcdim, box, triclinicCorrectionMatrix);
 
-    ivec       npulse;
-    const auto cellBoundaries = set_dd_cell_sizes_slb(dd, &ddbox, setcellsizeslbMAIN, npulse);
+    const auto cellBoundaries = set_dd_cell_sizes_slb(dd, &ddbox, setcellsizeslbMAIN);
 
     std::vector<std::vector<int>> indices(dd->nnodes);
 
@@ -528,7 +541,8 @@ static void distributeAtomGroups(const gmx::MDLogger& mdlog,
     }
     dd_scatter(dd, 2 * sizeof(int), ibuf, buf2);
 
-    dd->numHomeAtoms = buf2[0];
+    dd->numHomeAtoms                     = buf2[0];
+    dd->comm->numHomeAtomsWithoutFillers = buf2[0];
     dd->comm->atomRanges.setEnd(DDAtomRanges::Type::Home, buf2[1]);
     dd->globalAtomIndices.resize(dd->numHomeAtoms);
 

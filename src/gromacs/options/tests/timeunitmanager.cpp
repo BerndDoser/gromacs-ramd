@@ -45,14 +45,21 @@
 
 #include "gromacs/options/timeunitmanager.h"
 
+#include <string>
+
 #include <gtest/gtest.h>
 
+#include "gromacs/fileio/oenv.h"
 #include "gromacs/options/basicoptions.h"
 #include "gromacs/options/options.h"
 #include "gromacs/options/optionsassigner.h"
 
 #include "testutils/testasserts.h"
 
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
@@ -183,3 +190,5 @@ TEST(TimeUnitBehaviorTest, TimeUnitOptionWorks)
 }
 
 } // namespace
+} // namespace test
+} // namespace gmx

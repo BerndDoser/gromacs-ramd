@@ -44,12 +44,16 @@
 
 #include <map>
 #include <string>
+#include <utility>
 #include <vector>
+
+#include <gtest/gtest.h>
 
 #include "gromacs/analysisdata/tests/datatest.h"
 #include "gromacs/commandline/cmdlineoptionsmodule.h"
 #include "gromacs/trajectoryanalysis/analysismodule.h"
 #include "gromacs/trajectoryanalysis/cmdlinerunner.h"
+#include "gromacs/utility/gmxassert.h"
 
 #include "testutils/cmdlinetest.h"
 #include "testutils/refdata.h"
@@ -57,6 +61,8 @@
 
 namespace gmx
 {
+class AbstractAnalysisData;
+
 namespace test
 {
 
@@ -217,6 +223,16 @@ void AbstractTrajectoryAnalysisModuleTestFixture::runTest(const CommandLine& arg
     EXPECT_EQ(0, rc);
 
     checkOutputFiles();
+}
+
+void AbstractTrajectoryAnalysisModuleTestFixture::runTestAnticipatingException(const CommandLine& args)
+{
+    CommandLine& cmdline = commandLine();
+    cmdline.merge(args);
+    impl_->ensureModuleCreated();
+    ICommandLineOptionsModulePointer runner(
+            TrajectoryAnalysisCommandLineRunner::createModule(std::move(impl_->module_)));
+    CommandLineTestHelper::runModuleDirect(std::move(runner), &cmdline);
 }
 
 } // namespace test

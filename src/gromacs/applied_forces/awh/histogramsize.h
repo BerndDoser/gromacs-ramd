@@ -51,6 +51,7 @@
 #ifndef GMX_AWH_HISTOGRAMSIZE_H
 #define GMX_AWH_HISTOGRAMSIZE_H
 
+#include <cstdint>
 #include <cstdio>
 
 #include <vector>
@@ -175,9 +176,9 @@ private:
     double histogramSize_; /**< Size of reference weight histogram. */
 
     /* Values that control the evolution of the histogram size. */
-    bool   inInitialStage_;       /**< True if in the initial stage. */
-    double growthFactor_;         /**< The growth factor for the initial stage */
-    bool   equilibrateHistogram_; /**< True if samples are kept from accumulating until the sampled distribution is close enough to the target. */
+    bool   inInitialStage_;     /**< True if in the initial stage. */
+    double growthFactor_;       /**< The growth factor for the initial stage */
+    bool equilibrateHistogram_; /**< True if samples are kept from accumulating until the sampled distribution is close enough to the target. */
     double logScaledSampleWeight_; /**< The log of the current sample weight, scaled because of the histogram rescaling. */
     double maxLogScaledSampleWeight_; /**< Maximum sample weight obtained for previous (smaller) histogram sizes. */
 

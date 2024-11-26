@@ -49,23 +49,33 @@
 #include <cstring>
 
 #include <algorithm>
+#include <filesystem>
+#include <memory>
+#include <string>
+#include <vector>
 
+#include "gromacs/commandline/filenm.h"
 #include "gromacs/commandline/pargs.h"
+#include "gromacs/fileio/filetypes.h"
 #include "gromacs/fileio/tpxio.h"
 #include "gromacs/fileio/xvgr.h"
 #include "gromacs/gmxana/gmx_ana.h"
 #include "gromacs/math/functions.h"
 #include "gromacs/math/units.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/md_enums.h"
+#include "gromacs/mdtypes/pull_params.h"
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/pulling/pull.h"
+#include "gromacs/random/seed.h"
 #include "gromacs/random/tabulatednormaldistribution.h"
 #include "gromacs/random/threefry.h"
 #include "gromacs/random/uniformintdistribution.h"
 #include "gromacs/random/uniformrealdistribution.h"
 #include "gromacs/utility/arraysize.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/fatalerror.h"
@@ -73,7 +83,11 @@
 #include "gromacs/utility/gmxomp.h"
 #include "gromacs/utility/path.h"
 #include "gromacs/utility/pleasecite.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
+#include "gromacs/utility/stringutil.h"
+
+struct gmx_output_env_t;
 
 //! longest file names allowed in input files
 #define WHAM_MAXFILELEN 2048
@@ -167,8 +181,8 @@ typedef struct
     double*  k;     //!< force constants for the nPull coords
     double*  pos;   //!< umbrella positions for the nPull coords
     double* z; //!< z=(-Fi/kT) for the nPull coords. These values are iteratively computed during wham
-    int*    N;    //!< nr of data points in nPull histograms.
-    int*    Ntot; //!< also nr of data points. N and Ntot only differ if bHistEq==TRUE
+    int* N;    //!< nr of data points in nPull histograms.
+    int* Ntot; //!< also nr of data points. N and Ntot only differ if bHistEq==TRUE
 
     /*! \brief  g = 1 + 2*tau[int]/dt where tau is the integrated autocorrelation time.
      *
@@ -256,7 +270,7 @@ typedef struct UmbrellaOptions // NOLINT(clang-analyzer-optin.performance.Paddin
     gmx_bool bTauIntGiven, bCalcTauInt; //!< IACT given or should be calculated?
     real     sigSmoothIact;             //!< sigma of Gaussian to smooth ACTs
     gmx_bool bAllowReduceIact; //!< Allow to reduce ACTs during smoothing. Otherwise ACT are only increased during smoothing
-    real     acTrestart; //!< when computing ACT, time between restarting points
+    real acTrestart; //!< when computing ACT, time between restarting points
 
     /* \brief Enforce the same weight for each umbella window, that is
      *  calculate with the same number of data points for
@@ -313,7 +327,7 @@ typedef struct UmbrellaOptions // NOLINT(clang-analyzer-optin.performance.Paddin
     double * tabX, *tabY, tabMin, tabMax, tabDz;
     int      tabNbins;
     /*!\}*/
-    gmx::DefaultRandomEngine           rng;                //!< gromacs random number generator
+    gmx::DefaultRandomEngine rng;                          //!< gromacs random number generator
     gmx::TabulatedNormalDistribution<> normalDistribution; //!< Uses default: real output, 14-bit table
 } t_UmbrellaOptions;
 
@@ -593,7 +607,7 @@ static void setup_acc_wham(const double* profile, t_UmbrellaWindow* window, int 
                 contrib2 = window[i].N[j]
                            * std::exp(-U / (gmx::c_boltz * opt->Temperature) + window[i].z[j]);
                 window[i].bContrib[j][k] = (contrib1 > wham_contrib_lim || contrib2 > wham_contrib_lim);
-                bAnyContrib              = bAnyContrib || window[i].bContrib[j][k];
+                bAnyContrib = bAnyContrib || window[i].bContrib[j][k];
                 if (window[i].bContrib[j][k])
                 {
                     nContrib++;
@@ -1275,7 +1289,7 @@ static void do_bootstrapping(const char*        fnres,
                              const char*        fnprof,
                              const char*        fnhist,
                              const char*        xlabel,
-                             char*              ylabel,
+                             const char*        ylabel,
                              double*            profile,
                              t_UmbrellaWindow*  window,
                              int                nWindows,
@@ -3002,7 +3016,7 @@ int gmx_wham(int argc, char* argv[])
         "the histograms."
     };
 
-    const char* en_unit[]       = { nullptr, "kJ", "kCal", "kT", nullptr };
+    const char* en_unit[] = { nullptr, "kJ", "kCal", "kT", nullptr };
     const char* en_unit_label[] = { "", "E (kJ mol\\S-1\\N)", "E (kcal mol\\S-1\\N)", "E (kT)", nullptr };
     const char* en_bsMethod[] = { nullptr, "b-hist", "hist", "traj", "traj-gauss", nullptr };
     static t_UmbrellaOptions opt;

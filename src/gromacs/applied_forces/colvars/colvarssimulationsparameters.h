@@ -42,11 +42,17 @@
 #ifndef GMX_APPLIED_FORCES_COLVARSIMULATIONSPARAMETERS_H
 #define GMX_APPLIED_FORCES_COLVARSIMULATIONSPARAMETERS_H
 
+#include <memory>
+
 #include "gromacs/domdec/localatomsetmanager.h"
 #include "gromacs/mdtypes/commrec.h"
+#include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/topology/atoms.h"
 #include "gromacs/utility/logger.h"
+struct gmx_multisim_t;
+
+struct gmx_mtop_t;
 
 namespace gmx
 {
@@ -104,7 +110,12 @@ public:
     //! Return the communicator
     const t_commrec* comm() const;
 
-    /*! \brief Set the logger for QMMM during mdrun
+    //! Set the Multisim record
+    void setMultisim(const gmx_multisim_t* ms);
+    //! Return Multisim record
+    const gmx_multisim_t* ms() const;
+
+    /*! \brief Set the logger for Colvars during mdrun
      * \param[in] logger Logger instance to be used for output
      */
     void setLogger(const MDLogger& logger);
@@ -123,6 +134,8 @@ private:
     t_atoms gmxAtoms_;
     //! The communicator
     const t_commrec* cr_;
+    //! The multisim record
+    const gmx_multisim_t* ms_;
     //! MDLogger for notifications during mdrun
     const MDLogger* logger_ = nullptr;
 

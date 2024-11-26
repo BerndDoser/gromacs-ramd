@@ -45,6 +45,7 @@
 #include <cstdio>
 
 #include <algorithm>
+#include <filesystem>
 #include <memory>
 #include <vector>
 
@@ -56,12 +57,18 @@
 #include "gromacs/math/vec.h"
 #include "gromacs/mdlib/gmx_omp_nthreads.h"
 #include "gromacs/mdtypes/commrec.h"
+#include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/pbcutil/ishift.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/timing/wallcycle.h"
+#include "gromacs/topology/block.h"
+#include "gromacs/topology/forcefieldparameters.h"
 #include "gromacs/topology/ifunc.h"
 #include "gromacs/topology/mtop_util.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/topology/topology_enums.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/gmxassert.h"
@@ -918,7 +925,8 @@ static void construct_vsites_thread(ArrayRef<RVec>                  x,
 
     CLANG_DIAGNOSTIC_IGNORE("-Wunused-lambda-capture")
     // getVOrNull returns a velocity rvec if we need it, nullptr otherwise.
-    auto getVOrNull = [v](int idx) -> real* {
+    auto getVOrNull = [v](int idx) -> real*
+    {
         if (calculateVelocity == VSiteCalculateVelocity::Yes)
         {
             return v[idx].as_vec();
@@ -2518,7 +2526,7 @@ void VirtualSitesHandler::spreadForces(ArrayRef<const RVec> x,
     impl_->spreadForces(x, f, virialHandling, fshift, virial, nrnb, box, wcycle);
 }
 
-int countInterUpdategroupVsites(const gmx_mtop_t&                           mtop,
+int countInterUpdategroupVsites(const gmx_mtop_t& mtop,
                                 gmx::ArrayRef<const gmx::RangePartitioning> updateGroupingsPerMoleculeType)
 {
     int n_intercg_vsite = 0;
@@ -2622,9 +2630,9 @@ ThreadingInfo::ThreadingInfo() : numThreads_(gmx_omp_nthreads_get(ModuleMultiThr
     }
 }
 
-VirtualSitesHandler::Impl::Impl(const gmx_mtop_t&                       mtop,
-                                gmx_domdec_t*                           domdec,
-                                const PbcType                           pbcType,
+VirtualSitesHandler::Impl::Impl(const gmx_mtop_t& mtop,
+                                gmx_domdec_t*     domdec,
+                                const PbcType     pbcType,
                                 const ArrayRef<const RangePartitioning> updateGroupingPerMoleculeType) :
     numInterUpdategroupVirtualSites_(countInterUpdategroupVsites(mtop, updateGroupingPerMoleculeType)),
     domainInfo_({ pbcType, pbcType != PbcType::No && numInterUpdategroupVirtualSites_ > 0, domdec }),
@@ -2632,9 +2640,9 @@ VirtualSitesHandler::Impl::Impl(const gmx_mtop_t&                       mtop,
 {
 }
 
-VirtualSitesHandler::VirtualSitesHandler(const gmx_mtop_t&                       mtop,
-                                         gmx_domdec_t*                           domdec,
-                                         const PbcType                           pbcType,
+VirtualSitesHandler::VirtualSitesHandler(const gmx_mtop_t& mtop,
+                                         gmx_domdec_t*     domdec,
+                                         const PbcType     pbcType,
                                          const ArrayRef<const RangePartitioning> updateGroupingPerMoleculeType) :
     impl_(new Impl(mtop, domdec, pbcType, updateGroupingPerMoleculeType))
 {

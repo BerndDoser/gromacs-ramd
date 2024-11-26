@@ -41,12 +41,21 @@
 #ifndef GMX_MODULARSIMULATOR_CHECKPOINTDATA_H
 #define GMX_MODULARSIMULATOR_CHECKPOINTDATA_H
 
+#include <cstdint>
+#include <cstdio>
+
 #include <optional>
+#include <string>
+#include <type_traits>
+#include <vector>
 
 #include "gromacs/math/vectypes.h"
 #include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/exceptions.h"
+#include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/keyvaluetree.h"
 #include "gromacs/utility/keyvaluetreebuilder.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/stringutil.h"
 
 namespace gmx
@@ -84,7 +93,7 @@ enum class CheckpointDataOperation
  * \ingroup module_modularsimulator
  */
 template<CheckpointDataOperation operation, typename T>
-ArrayRef<std::conditional_t<operation == CheckpointDataOperation::Write || std::is_const<T>::value, const typename T::value_type, typename T::value_type>>
+ArrayRef<std::conditional_t<operation == CheckpointDataOperation::Write || std::is_const_v<T>, const typename T::value_type, typename T::value_type>>
 makeCheckpointArrayRef(T& container)
 {
     return container;
@@ -104,7 +113,7 @@ makeCheckpointArrayRef(T& container)
  * \ingroup module_modularsimulator
  */
 template<CheckpointDataOperation operation, typename T>
-ArrayRef<std::conditional_t<operation == CheckpointDataOperation::Write || std::is_const<T>::value, const T, T>>
+ArrayRef<std::conditional_t<operation == CheckpointDataOperation::Write || std::is_const_v<T>, const T, T>>
 makeCheckpointArrayRefFromArray(T* begin, size_t size)
 {
     return ArrayRef<T>(begin, begin + size);
@@ -121,9 +130,9 @@ makeCheckpointArrayRefFromArray(T* begin, size_t size)
 template<typename T>
 struct IsSerializableType
 {
-    static bool const value = std::is_same<T, std::string>::value || std::is_same<T, bool>::value
-                              || std::is_same<T, int>::value || std::is_same<T, int64_t>::value
-                              || std::is_same<T, float>::value || std::is_same<T, double>::value;
+    static bool const value = std::is_same_v<T, std::string> || std::is_same_v<T, bool>
+                              || std::is_same_v<T, int> || std::is_same_v<T, int64_t>
+                              || std::is_same_v<T, float> || std::is_same_v<T, double>;
 };
 
 /*! \internal
@@ -131,7 +140,7 @@ struct IsSerializableType
  * \brief Struct allowing to check if enum has a serializable underlying type
  */
 //! {
-template<typename T, bool = std::is_enum<T>::value>
+template<typename T, bool = std::is_enum_v<T>>
 struct IsSerializableEnum
 {
     static bool const value = IsSerializableType<std::underlying_type_t<T>>::value;

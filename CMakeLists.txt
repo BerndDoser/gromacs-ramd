@@ -31,19 +31,8 @@
 # To help us fund GROMACS development, we humbly ask that you cite
 # the research papers on the package. Check out https://www.gromacs.org.
 
-cmake_minimum_required(VERSION 3.18.4)
-
-cmake_policy(SET CMP0022 NEW)
-cmake_policy(SET CMP0048 NEW) # As of CMake 3.22, default is still "OLD"
-cmake_policy(SET CMP0068 NEW) # From CMake 3.9
-cmake_policy(SET CMP0074 NEW) # From CMake 3.12
-if(POLICY CMP0131) # From CMake 3.24
-    cmake_policy(SET CMP0131 NEW)
-endif()
-if(POLICY CMP0135) # From CMake 3.24
-    # We don't care about DOWNLOAD_EXTRACT_TIMESTAMP; prefer the new behavior
-    cmake_policy(SET CMP0135 NEW)
-endif()
+cmake_minimum_required(VERSION 3.28)
+cmake_policy(VERSION 3.28)
 
 # CMake modules/macros are in a subdirectory to keep this file cleaner
 # This needs to be set before project() in order to pick up toolchain files
@@ -75,7 +64,7 @@ endif()
 
 # The GROMACS convention is that these are the version number of the next
 # release that is going to be made from this branch.
-project(Gromacs VERSION 2025.0)
+project(Gromacs VERSION 2026.0)
 
 if(NOT CMAKE_CXX_STANDARD)
     set(CMAKE_CXX_STANDARD 17)
@@ -85,6 +74,23 @@ if(CMAKE_CXX_STANDARD LESS 17)
 endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Do not scan for C++ modules in C++20 mode (at least until we start using them).
+# This simplifies configuration and reduces build time.
+if(CMAKE_CXX_STANDARD GREATER_EQUAL 20)
+    if(NOT DEFINED CMAKE_CXX_SCAN_FOR_MODULES)
+        set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+    endif()
+endif()
+
+set(GMX_CLANG_MINIMUM_REQUIRED_VERSION 14)
+set(GMX_GCC_MINIMUM_REQUIRED_VERSION 11)
+set(GMX_CUDA_MINIMUM_REQUIRED_VERSION 12.1)
+set(GMX_CUDA_MINIMUM_REQUIRED_COMPUTE_CAPABILITY 5.0)
+
+# We start supporting HIP from version 5.2
+set(REQUIRED_HIP_VERSION 5.2)
+
 
 include(gmxManageCcache)
 
@@ -319,7 +325,7 @@ gmx_dependent_option(
 # OpenCL           | VkFFT or clFFT according to toolchain
 # SYCL via hipSYCL | VkFFT
 # SYCL via DPCPP   | MKL
-# HIP              | VkFFT
+# HIP              | VkFFT or rocFFT
 # =================+======================================
 if (GMX_GPU)
     if (GMX_GPU STREQUAL CUDA)
@@ -344,10 +350,10 @@ if (GMX_GPU)
         GMX_GPU_FFT_LIBRARY
         "GPU FFT library"
         "${GMX_GPU_FFT_LIBRARY_DEFAULT}"
-        cuFFT hipFFT clFFT VkFFT MKL oneMKL rocFFT BBFFT none)
+        cuFFT clFFT VkFFT MKL oneMKL rocFFT BBFFT none)
     # The validity of chosen option is later verified by the selected backend
 
-    foreach (_gpu_fft_library cuFFT hipFFT clFFT VkFFT MKL oneMKL rocFFT BBFFT)
+    foreach (_gpu_fft_library cuFFT clFFT VkFFT MKL oneMKL rocFFT BBFFT)
         string(TOUPPER "${_gpu_fft_library}" _gpu_fft_library_upper)
         if (GMX_GPU_FFT_LIBRARY STREQUAL ${_gpu_fft_library_upper})
             if (NOT GMX_GPU_FFT_QUIET_AFTER_FIRST_RUN)
@@ -569,6 +575,11 @@ include(gmxManageMimic)
 include(gmxManageCP2K)
 
 ########################################################################
+#Process NNPot settings
+########################################################################
+include(gmxManageNNPot)
+
+########################################################################
 #Process shared/static library settings
 ########################################################################
 include(gmxManageSharedLibraries)
@@ -678,11 +689,15 @@ endif()
 
 include(gmxManageTNG)
 
+include(gmxManageHDF5)
+
 include(gmxManageLmfit)
 
 include(gmxManageMuparser)
 
 include(gmxManageColvars)
+
+include(gmxManagePlumed)
 
 ##################################################
 # Process SIMD instruction settings
@@ -694,13 +709,6 @@ include(gmxManageColvars)
 # for SIMD math operations.
 include(gmxManageSimd)
 gmx_manage_simd()
-
-# The earliest version of the CUDA toolkit that supports c++17 is 11.0
-set(REQUIRED_CUDA_VERSION 11.0)
-set(REQUIRED_CUDA_COMPUTE_CAPABILITY 3.5)
-
-# We start supporting HIP from version 5.2
-set(REQUIRED_HIP_VERSION 5.2)
 
 if(GMX_GPU)
 
@@ -744,10 +752,10 @@ if(GMX_GPU)
             if(${_gmx_gpu_uppercase} STREQUAL "OPENCL")
                 set(_gmx_gpu_nb_cluster_size_value 8)
             elseif(GMX_GPU_SYCL)
-                if (GMX_SYCL_ACPP AND NOT GMX_HIPSYCL_HAVE_LEVELZERO_TARGET)
+                if (GMX_SYCL_ACPP AND NOT GMX_ACPP_HAVE_LEVELZERO_TARGET)
                     set(_gmx_gpu_nb_cluster_size_value 8)
                 else()
-                    # Either DPCPP or hipSYCL targeting Intel Level0
+                    # Either DPC++ or AdaptiveCpp targeting Intel Level0
                     set(_gmx_gpu_nb_cluster_size_value 4)
                 endif()
             endif()

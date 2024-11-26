@@ -39,18 +39,24 @@
  */
 #include "gmxpre.h"
 
+#include <cstddef>
+
+#include <array>
 #include <numeric>
+#include <string>
+#include <type_traits>
 #include <vector>
 
 #include <gtest/gtest.h>
 
 #include "gromacs/simd/simd.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/real.h"
 
 #include "simd.h"
 
 namespace gmx
 {
-
 #if GMX_SIMD_HAVE_REAL
 
 /* SimdInt32 is a strange type which would never belong in an interface,
@@ -72,6 +78,8 @@ class ArrayRef<const SimdInt32> : public internal::SimdArrayRef<const SimdInt32>
     using Base::Base;
 };
 
+namespace test
+{
 namespace
 {
 
@@ -165,7 +173,7 @@ TYPED_TEST(ArrayRefTest, ConstructFromArrayRefWorks)
 
     std::iota(a.begin(), a.end(), 0);
     ArrayRef<std::remove_const_t<typename TestFixture::ValueType>> ref(a.data(), a.data() + a.size());
-    typename TestFixture::ArrayRefType                             arrayRef(ref);
+    typename TestFixture::ArrayRefType arrayRef(ref);
     this->runReadOnlyTests(a.data(), 3, arrayRef);
 }
 
@@ -239,6 +247,7 @@ TYPED_TEST(ArrayRefArithmeticTest, Basic)
 #    endif // GTEST_HAS_TYPED_TEST
 
 } // namespace
+} // namespace test
 
 #endif // GMX_HAVE_SIMD_REAL
 

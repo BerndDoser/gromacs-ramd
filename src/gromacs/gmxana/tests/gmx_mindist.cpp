@@ -43,7 +43,12 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include <string>
+
+#include <gtest/gtest.h>
+
 #include "gromacs/gmxana/gmx_ana.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/futil.h"
 #include "gromacs/utility/path.h"
 #include "gromacs/utility/textreader.h"
@@ -55,6 +60,10 @@
 #include "testutils/textblockmatchers.h"
 #include "testutils/xvgtest.h"
 
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
@@ -194,3 +203,5 @@ TEST_F(MindistTest, matrixWorks)
 // TODO test periodic image - needs a tpr?
 
 } // namespace
+} // namespace test
+} // namespace gmx

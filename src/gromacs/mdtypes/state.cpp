@@ -39,6 +39,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <string>
 
 #include "gromacs/math/paddedvector.h"
 #include "gromacs/math/vec.h"
@@ -215,8 +216,12 @@ void df_history_t::doCheckpoint(gmx::CheckpointData<operation> checkpointData, L
     }
 
     checkpointData.scalar("bEquil", &bEquil);
-    checkpointData.arrayRef("n_at_lam", gmx::makeCheckpointArrayRefFromArray<operation>(n_at_lam, nlambda));
-
+    checkpointData.arrayRef(
+            "numSamplesAtLambdaForStatistics",
+            gmx::makeCheckpointArrayRefFromArray<operation>(numSamplesAtLambdaForStatistics, nlambda));
+    checkpointData.arrayRef("numSamplesAtLambdaForEquilibration",
+                            gmx::makeCheckpointArrayRefFromArray<operation>(
+                                    numSamplesAtLambdaForEquilibration, nlambda));
     checkpointData.arrayRef("sum_weights",
                             gmx::makeCheckpointArrayRefFromArray<operation>(sum_weights, nlambda));
     checkpointData.arrayRef("sum_dg", gmx::makeCheckpointArrayRefFromArray<operation>(sum_dg, nlambda));

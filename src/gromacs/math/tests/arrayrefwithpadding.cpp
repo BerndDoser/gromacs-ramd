@@ -41,6 +41,10 @@
 
 #include "gromacs/math/arrayrefwithpadding.h"
 
+#include <cstdint>
+
+#include <string>
+#include <type_traits>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -52,7 +56,8 @@
 
 namespace gmx
 {
-
+namespace test
+{
 namespace
 {
 
@@ -201,5 +206,5 @@ TEST(DISABLED_ArrayRefWithPaddingTest, GenericTests)
 #endif // GTEST_HAS_TYPED_TEST
 
 } // namespace
-
+} // namespace test
 } // namespace gmx

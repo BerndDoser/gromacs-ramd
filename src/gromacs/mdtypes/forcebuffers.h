@@ -47,9 +47,14 @@
 #define GMX_MDTYPES_FORCEBUFFERS_H
 
 #include <memory>
+#include <utility>
 
 #include "gromacs/gpu_utils/hostallocator.h"
+#include "gromacs/math/arrayrefwithpadding.h"
 #include "gromacs/math/vectypes.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/basedefinitions.h"
+#include "gromacs/utility/gmxassert.h"
 
 namespace gmx
 {
@@ -124,12 +129,8 @@ private:
     ArrayRefWithPadding<RVec> force_;
     //! The force buffer for combined fast and slow forces with MTS
     ArrayRefWithPadding<RVec> forceMtsCombined_;
-    // GCC 9 complains about unused attribute "unused" as it never warns about unused members,
-    // while clang requires it to avoid -Wunused
-    GCC_DIAGNOSTIC_IGNORE("-Wattributes")
     //! Whether we use forceMtsCombined_
     gmx_used_in_debug bool useForceMtsCombined_;
-    GCC_DIAGNOSTIC_RESET
 };
 
 /*! \libinternal \brief Object that holds the force buffers

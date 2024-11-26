@@ -42,12 +42,20 @@
 
 #include "gromacs/trajectoryanalysis/modules/distance.h"
 
+#include <string>
+
 #include <gtest/gtest.h>
+
+#include "gromacs/utility/arrayref.h"
 
 #include "testutils/cmdlinetest.h"
 
 #include "moduletest.h"
 
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
@@ -115,3 +123,5 @@ TEST_F(DistanceModuleTest, HandlesSelectionFromLargeGroup)
 }
 
 } // namespace
+} // namespace test
+} // namespace gmx

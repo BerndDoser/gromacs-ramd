@@ -36,8 +36,13 @@
 
 #include "powerspect.h"
 
+#include <cstdio>
+
+#include <filesystem>
+
 #include "gromacs/fft/fft.h"
 #include "gromacs/gmxana/interf.h"
+#include "gromacs/math/gmxcomplex.h"
 #include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/futil.h"
@@ -57,7 +62,7 @@ static void addtoavgenergy(t_complex* list, real* result, int size, int tsteps)
 void powerspectavg(real*** intftab, int tsteps, int xbins, int ybins, gmx::ArrayRef<const std::string> outfiles)
 {
     /*Fourier plans and output;*/
-    gmx_fft_t  fftp;
+    gmx_fft_t fftp;
     t_complex* ftspect1; /* Spatial FFT of interface for each time frame and interface ftint[time,xycoord][0], ftintf[time,xycoord][1] for interface 1 and 2                 respectively */
     t_complex* ftspect2;
     real*      pspectavg1; /*power -spectrum 1st interface*/

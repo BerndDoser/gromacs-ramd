@@ -36,13 +36,19 @@
 #include "pdb2gmx.h"
 
 #include <cctype>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
 
 #include <algorithm>
+#include <filesystem>
+#include <iterator>
 #include <memory>
+#include <optional>
 #include <string>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "gromacs/commandline/cmdlineoptionsmodule.h"
@@ -63,28 +69,44 @@
 #include "gromacs/gmxpreprocess/ter_db.h"
 #include "gromacs/gmxpreprocess/toputil.h"
 #include "gromacs/gmxpreprocess/xlate.h"
+#include "gromacs/math/functions.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/options/basicoptions.h"
 #include "gromacs/options/filenameoption.h"
 #include "gromacs/options/ioptionscontainer.h"
 #include "gromacs/topology/atomprop.h"
+#include "gromacs/topology/atoms.h"
 #include "gromacs/topology/block.h"
 #include "gromacs/topology/index.h"
 #include "gromacs/topology/residuetypes.h"
 #include "gromacs/topology/symtab.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/basedefinitions.h"
+#include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/filestream.h"
+#include "gromacs/utility/futil.h"
+#include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/logger.h"
 #include "gromacs/utility/loggerbuilder.h"
 #include "gromacs/utility/path.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/strdb.h"
 #include "gromacs/utility/stringutil.h"
 
 #include "hackblock.h"
 #include "resall.h"
+
+enum class PbcType : int;
+namespace gmx
+{
+class CommandLineModuleSettings;
+} // namespace gmx
 
 struct RtpRename
 {
@@ -107,9 +129,10 @@ const char* res2bb_notermini(const std::string& name, gmx::ArrayRef<const RtpRen
     /* NOTE: This function returns the main building block name,
      *       it does not take terminal renaming into account.
      */
-    auto found = std::find_if(rr.begin(), rr.end(), [&name](const auto& rename) {
-        return gmx::equalCaseInsensitive(name, rename.gmx);
-    });
+    auto found = std::find_if(rr.begin(),
+                              rr.end(),
+                              [&name](const auto& rename)
+                              { return gmx::equalCaseInsensitive(name, rename.gmx); });
     return found != rr.end() ? found->main.c_str() : name.c_str();
 }
 
@@ -343,10 +366,13 @@ void read_rtprename(const char* fname, FILE* fp, std::vector<RtpRename>* rtprena
 
 std::string search_resrename(gmx::ArrayRef<const RtpRename> rr, const char* name, bool bStart, bool bEnd, bool bCompareFFRTPname)
 {
-    auto found = std::find_if(rr.begin(), rr.end(), [&name, &bCompareFFRTPname](const auto& rename) {
-        return ((!bCompareFFRTPname && (name == rename.gmx))
-                || (bCompareFFRTPname && (name == rename.main)));
-    });
+    auto found = std::find_if(rr.begin(),
+                              rr.end(),
+                              [&name, &bCompareFFRTPname](const auto& rename)
+                              {
+                                  return ((!bCompareFFRTPname && (name == rename.gmx))
+                                          || (bCompareFFRTPname && (name == rename.main)));
+                              });
 
     std::string newName;
     /* If found in the database, rename this residue's rtp building block,
@@ -1429,9 +1455,9 @@ bool checkChainCyclicity(t_atoms*                               pdba,
     {
         return false;
     }
-    int         ai = -1, aj = -1;
-    char*       rtpname = *(pdba->resinfo[start_ter].rtp);
-    std::string newName = search_resrename(rr, rtpname, false, false, false);
+    std::optional<int> ai, aj;
+    char*              rtpname = *(pdba->resinfo[start_ter].rtp);
+    std::string        newName = search_resrename(rr, rtpname, false, false, false);
     if (newName.empty())
     {
         newName = rtpname;
@@ -1439,6 +1465,7 @@ bool checkChainCyclicity(t_atoms*                               pdba,
     auto        res = getDatabaseEntry(newName, rtpFFDB);
     const char *name_ai, *name_aj;
 
+    bool bothFound = false;
     for (const auto& patch : res->rb[BondedTypes::Bonds].b)
     { /* Search backward bond for n/5' terminus */
         name_ai = patch.ai().c_str();
@@ -1453,13 +1480,14 @@ bool checkChainCyclicity(t_atoms*                               pdba,
             aj = search_res_atom(++name_aj, end_ter, pdba, "check", TRUE);
             ai = search_res_atom(name_ai, start_ter, pdba, "check", TRUE);
         }
-        if (ai >= 0 && aj >= 0)
+        if (ai.has_value() and aj.has_value())
         {
+            bothFound = true;
             break; /* Found */
         }
     }
 
-    if (!(ai >= 0 && aj >= 0))
+    if (!bothFound)
     {
         rtpname = *(pdba->resinfo[end_ter].rtp);
         newName = search_resrename(rr, rtpname, false, false, false);
@@ -1484,16 +1512,17 @@ bool checkChainCyclicity(t_atoms*                               pdba,
                 ai = search_res_atom(name_ai, end_ter, pdba, "check", TRUE);
                 aj = search_res_atom(++name_aj, start_ter, pdba, "check", TRUE);
             }
-            if (ai >= 0 && aj >= 0)
+            if (ai.has_value() and aj.has_value())
             {
+                bothFound = true;
                 break;
             }
         }
     }
 
-    if (ai >= 0 && aj >= 0)
+    if (bothFound)
     {
-        real dist = distance2(pdbx[ai], pdbx[aj]);
+        real dist = distance2(pdbx[ai.value()], pdbx[aj.value()]);
         /* it is better to read bond length from ffbonded.itp */
         return (dist < gmx::square(long_bond_dist_) && dist > gmx::square(short_bond_dist_));
     }
@@ -2285,7 +2314,7 @@ int pdb2gmx::run()
         init_t_atoms(chains[i].pdba, pdb_ch[si].natom, true);
         for (j = 0; j < chains[i].pdba->nr; j++)
         {
-            chains[i].pdba->atom[j]     = pdba_all.atom[pdb_ch[si].start + j];
+            chains[i].pdba->atom[j] = pdba_all.atom[pdb_ch[si].start + j];
             chains[i].pdba->atomname[j] = put_symtab(&symtab, *pdba_all.atomname[pdb_ch[si].start + j]);
             chains[i].pdba->pdbinfo[j] = pdba_all.pdbinfo[pdb_ch[si].start + j];
             chains[i].x.emplace_back(pdbx[pdb_ch[si].start + j]);

@@ -49,6 +49,9 @@
 
 #include "gromacs/analysisdata/modules/histogram.h"
 
+#include <memory>
+#include <string>
+
 #include <gtest/gtest.h>
 
 #include "gromacs/analysisdata/analysisdata.h"
@@ -58,6 +61,10 @@
 
 using gmx::test::AnalysisDataTestInput;
 
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
@@ -528,3 +535,5 @@ TEST_F(AbstractAverageHistogramTest, ResamplesAtDoubleBinWidthWithIntegerBins)
 }
 
 } // namespace
+} // namespace test
+} // namespace gmx

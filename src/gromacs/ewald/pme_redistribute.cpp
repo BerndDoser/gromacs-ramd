@@ -47,12 +47,19 @@
 
 #include "config.h"
 
+#include <cstdio>
+
 #include <algorithm>
+#include <array>
+#include <filesystem>
+#include <vector>
 
 #include "gromacs/math/vec.h"
 #include "gromacs/mdtypes/commrec.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/fatalerror.h"
+#include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/gmxmpi.h"
 
 #include "pme_internal.h"
@@ -241,10 +248,10 @@ void PmeAtomComm::setNumAtoms(const int numAtoms)
 static void pme_dd_sendrecv(PmeAtomComm gmx_unused* atc,
                             gmx_bool gmx_unused     bBackward,
                             int gmx_unused          shift,
-                            void gmx_unused* buf_s,
-                            int gmx_unused   nbyte_s,
-                            void gmx_unused* buf_r,
-                            int gmx_unused   nbyte_r)
+                            void gmx_unused*        buf_s,
+                            int gmx_unused          nbyte_s,
+                            void gmx_unused*        buf_r,
+                            int gmx_unused          nbyte_r)
 {
 #if GMX_MPI
     int        dest, src;

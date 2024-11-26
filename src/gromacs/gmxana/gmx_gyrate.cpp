@@ -34,15 +34,21 @@
 #include "gmxpre.h"
 
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #include <array>
+#include <filesystem>
+#include <string>
 #include <vector>
 
+#include "gromacs/commandline/filenm.h"
 #include "gromacs/commandline/pargs.h"
 #include "gromacs/commandline/viewit.h"
 #include "gromacs/correlationfunctions/autocorr.h"
 #include "gromacs/fileio/confio.h"
+#include "gromacs/fileio/filetypes.h"
 #include "gromacs/fileio/trxio.h"
 #include "gromacs/fileio/xvgr.h"
 #include "gromacs/gmxana/gmx_ana.h"
@@ -50,12 +56,20 @@
 #include "gromacs/math/functions.h"
 #include "gromacs/math/units.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/pbcutil/rmpbc.h"
+#include "gromacs/topology/atoms.h"
 #include "gromacs/topology/index.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/arraysize.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/fatalerror.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
+
+enum class PbcType : int;
+struct gmx_output_env_t;
 
 static real calc_gyro(rvec     x[],
                       int      gnx,
@@ -168,8 +182,8 @@ static void calc_gyro_z(rvec x[], matrix box, int gnx, const int index[], t_atom
             inertia[j][i] /= tm[j];
         }
         sdet = std::sqrt(gmx::square(inertia[j][0] - inertia[j][1]) + 4 * gmx::square(inertia[j][2]));
-        e1   = std::sqrt(0.5 * (inertia[j][0] + inertia[j][1] + sdet));
-        e2   = std::sqrt(0.5 * (inertia[j][0] + inertia[j][1] - sdet));
+        e1 = std::sqrt(0.5 * (inertia[j][0] + inertia[j][1] + sdet));
+        e2 = std::sqrt(0.5 * (inertia[j][0] + inertia[j][1] - sdet));
         fprintf(out, " %5.3f %5.3f", e1, e2);
     }
     fprintf(out, "\n");
@@ -196,25 +210,25 @@ int gmx_gyrate(int argc, char* argv[])
     t_pargs         pa[] = {
         { "-nmol", FALSE, etINT, { &nmol }, "The number of molecules to analyze" },
         { "-q",
-          FALSE,
-          etBOOL,
-          { &bQ },
-          "Use absolute value of the charge of an atom as weighting factor instead of mass" },
+                  FALSE,
+                  etBOOL,
+                  { &bQ },
+                  "Use absolute value of the charge of an atom as weighting factor instead of mass" },
         { "-p",
-          FALSE,
-          etBOOL,
-          { &bRot },
-          "Calculate the radii of gyration about the principal axes." },
+                  FALSE,
+                  etBOOL,
+                  { &bRot },
+                  "Calculate the radii of gyration about the principal axes." },
         { "-moi",
-          FALSE,
-          etBOOL,
-          { &bMOI },
-          "Calculate the moments of inertia (defined by the principal axes)." },
+                  FALSE,
+                  etBOOL,
+                  { &bMOI },
+                  "Calculate the moments of inertia (defined by the principal axes)." },
         { "-nz",
-          FALSE,
-          etINT,
-          { &nz },
-          "Calculate the 2D radii of gyration of this number of slices along the z-axis" },
+                  FALSE,
+                  etINT,
+                  { &nz },
+                  "Calculate the 2D radii of gyration of this number of slices along the z-axis" },
     };
     FILE*                      out;
     t_trxstatus*               status;

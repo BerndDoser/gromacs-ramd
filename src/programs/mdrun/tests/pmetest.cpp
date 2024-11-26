@@ -43,25 +43,45 @@
  */
 #include "gmxpre.h"
 
+#include "config.h"
+
+#include <cstdlib>
+
+#include <algorithm>
+#include <filesystem>
+#include <functional>
 #include <map>
+#include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
+#include <string_view>
+#include <tuple>
+#include <unordered_map>
 #include <vector>
 
 #include <gtest/gtest-spi.h>
+#include <gtest/gtest.h>
 
 #include "gromacs/ewald/pme.h"
+#include "gromacs/hardware/device_management.h"
 #include "gromacs/hardware/hw_info.h"
 #include "gromacs/trajectory/energyframe.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/basenetwork.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/message_string_collector.h"
 #include "gromacs/utility/mpiinfo.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/stringutil.h"
 
+#include "testutils/cmdlinetest.h"
 #include "testutils/mpitest.h"
+#include "testutils/naming.h"
 #include "testutils/refdata.h"
+#include "testutils/testasserts.h"
+#include "testutils/testfilemanager.h"
 
 #include "energyreader.h"
 #include "moduletest.h"
@@ -95,56 +115,13 @@ const char* enumValueToString(const PmeTestFlavor enumValue)
 // run, and options for an mdrun command line.
 using PmeTestParameters = std::tuple<PmeTestFlavor, std::string>;
 
-/*! \brief Help GoogleTest name our tests
- *
- * If changes are needed here, consider making matching changes in
- * makeRefDataFileName(). */
-std::string nameOfTest(const testing::TestParamInfo<PmeTestParameters>& info)
-{
-    std::string testName = formatString(
-            "%s_mdrun_%s", enumValueToString(std::get<0>(info.param)), std::get<1>(info.param).c_str());
+//! Tuple of formatters to name the parameterized test cases
+const NameOfTestFromTuple<PmeTestParameters> sc_testNamer{ std::make_tuple(enumValueToString, useString) };
 
-    // Note that the returned names must be unique and may use only
-    // alphanumeric ASCII characters. It's not supposed to contain
-    // underscores (see the GoogleTest FAQ
-    // why-should-test-suite-names-and-test-names-not-contain-underscore),
-    // but doing so works for now, is likely to remain so, and makes
-    // such test names much more readable.
-    testName = replaceAll(testName, "-", "");
-    testName = replaceAll(testName, " ", "_");
-    return testName;
-}
-
-/*! \brief Construct a refdata filename for this test
- *
- * We want the same reference data to apply to every mdrun command
- * line that we test. That means we need to store it in a file whose
- * name relates to the name of the test excluding the part related to
- * the mdrun command line. By default, the reference data filename is
- * set via a call to gmx::TestFileManager::getTestSpecificFileName()
- * that queries GoogleTest and gets a string that includes the return
- * value for nameOfTest(). This code works similarly, but removes the
- * aforementioned part. This logic must match the implementation of
- * nameOfTest() so that it works as intended. */
-std::string makeRefDataFileName()
-{
-    // Get the info about the test
-    const ::testing::TestInfo* testInfo = ::testing::UnitTest::GetInstance()->current_test_info();
-
-    // Get the test name and edit it to remove the mdrun command-line
-    // part.
-    std::string testName(testInfo->name());
-    auto        separatorPos = testName.find("_mdrun");
-    testName                 = testName.substr(0, separatorPos);
-
-    // Build the complete filename like getTestSpecificFilename() does
-    // it.
-    std::string testSuiteName(testInfo->test_suite_name());
-    std::string refDataFileName = testSuiteName + "_" + testName + ".xml";
-    std::replace(refDataFileName.begin(), refDataFileName.end(), '/', '_');
-
-    return refDataFileName;
-}
+//! Tuple of formatters to name the test-case reference data uniquely enough
+const RefDataFilenameMaker<PmeTestParameters> sc_refDataFilenameMaker{
+    std::make_tuple(enumValueToString, toEmptyString<std::string>)
+};
 
 /*! \brief Test fixture for end-to-end execution of PME */
 class PmeTest : public MdrunTestFixture, public ::testing::WithParamInterface<PmeTestParameters>
@@ -348,7 +325,7 @@ void PmeTest::checkEnergies(const bool usePmeTuning) const
     // Some indentation preserved only for reviewer convenience
     {
         {
-            TestReferenceData    refData(makeRefDataFileName());
+            TestReferenceData    refData(sc_refDataFilenameMaker(GetParam()));
             TestReferenceChecker rootChecker(refData.rootChecker());
 
             auto energyReader = openEnergyFileToReadTerms(
@@ -431,7 +408,7 @@ const auto c_reproducesEnergies = ::testing::ValuesIn(std::vector<PmeTestParamet
         { PmeTestFlavor::Basic, "-tunepme -npme 0 -pme gpu -pmefft gpu" },
 } });
 
-INSTANTIATE_TEST_SUITE_P(ReproducesEnergies, PmeTest, c_reproducesEnergies, nameOfTest);
+INSTANTIATE_TEST_SUITE_P(ReproducesEnergies, PmeTest, c_reproducesEnergies, sc_testNamer);
 
 } // namespace
 } // namespace test

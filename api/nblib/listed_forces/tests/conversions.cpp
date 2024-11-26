@@ -40,17 +40,34 @@
  * \author Prashanth Kanduri <kanduri@cscs.ch>
  * \author Sebastian Keller <keller@cscs.ch>
  */
+#include <cstddef>
+
 #include <array>
+#include <memory>
+#include <string>
+#include <tuple>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 #include <gtest/gtest.h>
 
 #include "listed_forces/conversionscommon.h"
 
+#include "gromacs/math/vectypes.h"
 #include "gromacs/topology/forcefieldparameters.h"
+#include "gromacs/topology/idef.h"
+#include "gromacs/topology/ifunc.h"
+#include "gromacs/utility/real.h"
 
 #include "testutils/testasserts.h"
 
+#include "nblib/basicdefinitions.h"
 #include "nblib/box.h"
+#include "nblib/listed_forces/bondtypes.h"
+#include "nblib/listed_forces/definitions.h"
+#include "nblib/util/traits.hpp"
+#include "nblib/util/util.hpp"
 
 #include "listedtesthelpers.h"
 #include "testhelpers.h"
@@ -196,7 +213,8 @@ ListedInteractionData combineTestInput(std::tuple<Ts...> testInput)
     ListedInteractionData interactionData;
     // transfer all elements of testInput into the returned ListedInteractionData
     // use a lambda + for_each_tuple
-    auto copyParamsOneType = [&interactionData](const auto& typeInput) {
+    auto copyParamsOneType = [&interactionData](const auto& typeInput)
+    {
         for (size_t i = 0; i < typeInput.interactionData.parameters.size(); i++)
         {
             auto interactionParams = typeInput.interactionData.parameters[i];
@@ -221,7 +239,8 @@ TEST(NBlibTest, GmxToNblibConversionAllTypes)
 
     ListedInteractionData convertedData = convertToNblibInteractions(*idef);
 
-    auto compareParamsAndIndices = [&convertedData](auto& original) {
+    auto compareParamsAndIndices = [&convertedData](auto& original)
+    {
         if (!original.parameters.empty())
         {
             using InteractionType = typename std::decay_t<decltype(original)>::type;
@@ -230,8 +249,8 @@ TEST(NBlibTest, GmxToNblibConversionAllTypes)
             // compare parameters
             // comparing the two cosine angles with lower tolerance as this test introduces
             // numerical errors via the x != arccos(cos(x)) comparison
-            if constexpr (std::is_same<InteractionType, G96Angle>::value
-                          || std::is_same<InteractionType, RestrictedAngle>::value)
+            if constexpr (std::is_same_v<InteractionType, G96Angle>
+                          || std::is_same_v<InteractionType, RestrictedAngle>)
             {
                 // There is only one interaction parameter checked per loop through the parameter
                 // list, so it is correct to only check the first element in the parameters list

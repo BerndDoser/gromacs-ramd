@@ -41,6 +41,12 @@
  */
 #include "gmxpre.h"
 
+#include <string>
+
+#include <gtest/gtest.h>
+
+#include "testutils/cmdlinetest.h"
+
 #include "moduletest.h"
 
 namespace gmx
@@ -48,19 +54,9 @@ namespace gmx
 namespace test
 {
 
-class OriresTestFixture : public MdrunTestFixture
+class OriresTest : public MdrunTestFixture
 {
-protected:
-    OriresTestFixture();
-    ~OriresTestFixture() override;
 };
-
-OriresTestFixture::OriresTestFixture() {}
-
-OriresTestFixture::~OriresTestFixture() {}
-
-//! Test fixture for mdrun with orires
-typedef gmx::test::OriresTestFixture OriresTest;
 
 /* Check whether the orires function works. */
 TEST_F(OriresTest, OriresCanRun)

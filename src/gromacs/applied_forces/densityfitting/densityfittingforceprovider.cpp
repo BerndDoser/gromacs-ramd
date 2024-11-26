@@ -42,20 +42,35 @@
 
 #include "densityfittingforceprovider.h"
 
+#include <algorithm>
+#include <array>
+#include <iterator>
 #include <numeric>
 #include <optional>
+#include <vector>
 
+#include "gromacs/compat/pointers.h"
 #include "gromacs/domdec/localatomset.h"
 #include "gromacs/gmxlib/network.h"
 #include "gromacs/math/coordinatetransformation.h"
 #include "gromacs/math/densityfit.h"
 #include "gromacs/math/densityfittingforce.h"
 #include "gromacs/math/gausstransform.h"
+#include "gromacs/math/matrix.h"
+#include "gromacs/math/multidimarray.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/mdlib/broadcaststructs.h"
+#include "gromacs/mdspan/extents.h"
+#include "gromacs/mdspan/layouts.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/enerdata.h"
 #include "gromacs/mdtypes/forceoutput.h"
 #include "gromacs/pbcutil/pbc.h"
+#include "gromacs/topology/ifunc.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/keyvaluetree.h"
+#include "gromacs/utility/keyvaluetreebuilder.h"
 #include "gromacs/utility/strconvert.h"
 
 #include "densityfittingamplitudelookup.h"
@@ -189,7 +204,7 @@ private:
 
 DensityFittingForceProvider::Impl::~Impl() = default;
 
-DensityFittingForceProvider::Impl::Impl(const DensityFittingParameters&             parameters,
+DensityFittingForceProvider::Impl::Impl(const DensityFittingParameters& parameters,
                                         basic_mdspan<const float, dynamicExtents3D> referenceDensity,
                                         const TranslateAndScale& transformationToDensityLattice,
                                         const LocalAtomSet&      localAtomSet,
@@ -335,14 +350,13 @@ void DensityFittingForceProvider::Impl::calculateForces(const ForceProviderInput
             measure_.gradient(gaussTransform_.constView());
     // calculate forces
     forces_.resize(localAtomSet_.numAtomsLocal());
-    std::transform(
-            std::begin(transformedCoordinates_),
-            std::end(transformedCoordinates_),
-            std::begin(amplitudes),
-            std::begin(forces_),
-            [&densityDerivative, this](const RVec r, real amplitude) {
-                return densityFittingForce_.evaluateForce({ r, amplitude }, densityDerivative);
-            });
+    std::transform(std::begin(transformedCoordinates_),
+                   std::end(transformedCoordinates_),
+                   std::begin(amplitudes),
+                   std::begin(forces_),
+                   [&densityDerivative, this](const RVec r, real amplitude) {
+                       return densityFittingForce_.evaluateForce({ r, amplitude }, densityDerivative);
+                   });
 
     // correct forces for coordinate transformations with chain rule
     // F = -k d U(transform(x)) / d x =
@@ -362,7 +376,7 @@ void DensityFittingForceProvider::Impl::calculateForces(const ForceProviderInput
     }
 
     // multiply with the current force constant
-    auto       densityForceIterator = forces_.cbegin();
+    auto densityForceIterator = forces_.cbegin();
     const real effectiveForceConstant = state_.adaptiveForceConstantScale_ * parameters_.calculationIntervalInSteps_
                                         * parameters_.forceConstant_;
     for (const auto localAtomIndex : localAtomSet_.localIndex())
@@ -433,7 +447,7 @@ void DensityFittingForceProvider::calculateForces(const ForceProviderInput& forc
 }
 
 void DensityFittingForceProvider::writeCheckpointData(MDModulesWriteCheckpointData checkpointWriting,
-                                                      const std::string&           moduleName)
+                                                      const std::string& moduleName)
 {
     impl_->stateToCheckpoint().writeState(checkpointWriting.builder_, moduleName);
 }

@@ -45,12 +45,15 @@
 
 #include "gromacs/trajectoryanalysis/modules/dssp.h"
 
+#include <filesystem>
 #include <string>
+#include <tuple>
 
 #include <gtest/gtest-param-test.h>
 #include <gtest/gtest.h>
 
 #include "gromacs/utility/path.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/stringutil.h"
 
 #include "testutils/cmdlinetest.h"
@@ -95,7 +98,7 @@ TEST_P(DsspModuleTest, Works)
     setTrajectory(inputFilename.c_str());
     setOutputFile("-o",
                   formatString("%s-%s-%s-%.1f-%s-%s.dat",
-                               inputBasename.c_str(),
+                               inputBasename.string().c_str(),
                                std::get<1>(params).c_str(),
                                std::get<2>(params).c_str(),
                                std::get<3>(params),
@@ -111,7 +114,7 @@ TEST_P(DsspModuleTest, Works)
     command.addOption(std::string("-" + std::get<6>(params)).c_str());
     setOutputFile("-num",
                   formatString("%s-%s-%s-%.1f-%s-%s.xvg",
-                               inputBasename.c_str(),
+                               inputBasename.string().c_str(),
                                std::get<1>(params).c_str(),
                                std::get<2>(params).c_str(),
                                std::get<3>(params),

@@ -41,11 +41,15 @@
 
 #include "gromacs/utility/message_string_collector.h"
 
+#include <string>
+#include <utility>
+
 #include <gtest/gtest.h>
 
 namespace gmx
 {
-
+namespace test
+{
 namespace
 {
 
@@ -204,5 +208,5 @@ TEST(MessageStringCollectorTest, CanMoveAssign)
 }
 
 } // namespace
-
+} // namespace test
 } // namespace gmx

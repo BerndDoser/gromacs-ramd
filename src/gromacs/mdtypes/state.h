@@ -51,7 +51,10 @@
 #ifndef GMX_MDTYPES_STATE_H
 #define GMX_MDTYPES_STATE_H
 
+#include <cstdio>
+
 #include <array>
+#include <limits>
 #include <memory>
 #include <vector>
 
@@ -59,6 +62,8 @@
 #include "gromacs/math/paddedvector.h"
 #include "gromacs/math/vectypes.h"
 #include "gromacs/mdtypes/md_enums.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/real.h"
 
@@ -202,15 +207,16 @@ public:
  */
 struct df_history_t
 {
-    int nlambda; //!< total number of lambda states - for history
+    int nlambda; //!< total number of lambda states - useful to history as the number of lambdas determines the size of arrays.
 
-    bool  bEquil;   //!< Have we reached equilibration
-    int*  n_at_lam; //!< number of points observed at each lambda
-    real* wl_histo; //!< histogram for WL flatness determination
-    real  wl_delta; //!< current wang-landau delta
+    bool bEquil; //!< Have we reached equilibration yet, where the weights stop updating?
+    int* numSamplesAtLambdaForStatistics; //!< The number of points observed at each lambda up to the current time, in this simulation, for calculating statistics
+    int* numSamplesAtLambdaForEquilibration; //!< The number of points observed at each lambda up to the current time, over a set of simulations, for determining equilibration
+    real* wl_histo; //!< The histogram for WL flatness determination.  Can be preserved between simulations winth input options.
+    real wl_delta;  //!< The current wang-landau delta, used to increment each state when visited.
 
-    real* sum_weights; //!< weights of the states
-    real* sum_dg; //!< free energies of the states -- not actually used for weighting, but informational
+    real* sum_weights; //!< Sum of weights of each state over all states.
+    real* sum_dg; //!< Sum of the free energies of the states -- not actually used for weighting, but informational
     real* sum_minvar;   //!< corrections to weights for minimum variance
     real* sum_variance; //!< variances of the states
 
@@ -219,8 +225,8 @@ struct df_history_t
     real** accum_p2; //!< accumulated squared bennett weights for n+1
     real** accum_m2; //!< accumulated squared bennett weights for n-1
 
-    real** Tij;           //!< transition matrix
-    real** Tij_empirical; //!< Empirical transition matrix
+    real** Tij;           //!< Transition matrix, estimated from probabilities of transitions.
+    real** Tij_empirical; //!< Empirical transition matrix, estimated from only counts of transitions.
 
     /*! \brief Allows to read and write checkpoint within modular simulator
      *
@@ -275,7 +281,7 @@ public:
     int nhchainlength; //!< The NH-chain length for temperature coupling and MTTK barostat
     int fep_state;     //!< indicates which of the alchemical states we are in
     gmx::EnumerationArray<FreeEnergyPerturbationCouplingType, real> lambda; //!< Free-energy lambda vector
-    matrix                                                          box; //!< Matrix of box vectors
+    matrix box; //!< Matrix of box vectors
     //! Relative box vectors characteristic of the box shape, used to to preserve that box shape
     matrix              box_rel;
     matrix              boxv;           //!< Box velocities for Parrinello-Rahman P-coupling
@@ -317,7 +323,7 @@ struct t_extmass
 {
     std::vector<double> Qinv; /* inverse mass of thermostat -- computed from inputs, but a good place to store */
     std::vector<double> QPinv; /* inverse mass of thermostat for barostat -- computed from inputs, but a good place to store */
-    double              Winv; /* Pressure mass inverse -- computed, not input, but a good place to store. Need to make a matrix later */
+    double Winv; /* Pressure mass inverse -- computed, not input, but a good place to store. Need to make a matrix later */
 };
 
 #endif // DOXYGEN

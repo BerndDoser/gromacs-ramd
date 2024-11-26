@@ -41,18 +41,32 @@
  */
 #include "nblib/gmxcalculatorcpu.h"
 
+#include <algorithm>
+#include <iterator>
+#include <type_traits>
+
 #include "gromacs/ewald/ewald_utils.h"
+#include "gromacs/math/vec.h"
 #include "gromacs/mdtypes/enerdata.h"
+#include "gromacs/mdtypes/forcerec.h"
 #include "gromacs/mdtypes/interaction_const.h"
+#include "gromacs/mdtypes/locality.h"
+#include "gromacs/mdtypes/md_enums.h"
+#include "gromacs/mdtypes/simulation_workload.h"
 #include "gromacs/nbnxm/atomdata.h"
 #include "gromacs/nbnxm/nbnxm.h"
 #include "gromacs/nbnxm/pairlistset.h"
 #include "gromacs/nbnxm/pairlistsets.h"
 #include "gromacs/nbnxm/pairsearch.h"
+#include "gromacs/pbcutil/ishift.h"
+#include "gromacs/pbcutil/pbc.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/listoflists.h"
 #include "gromacs/utility/range.h"
 
 #include "nblib/exception.h"
+#include "nblib/kerneloptions.h"
 #include "nblib/nbnxmsetuphelpers.h"
 #include "nblib/topology.h"
 #include "nblib/tpr.h"
@@ -155,10 +169,10 @@ void GmxNBForceCalculatorCpu::CpuImpl::updatePairlist(gmx::ArrayRef<gmx::RVec> c
                                   upperCorner,
                                   nullptr,
                                   { 0, int(coordinates.size()) },
+                                  coordinates.size(),
                                   particleDensity,
                                   system_.particleInfo_,
                                   coordinates,
-                                  0,
                                   nullptr);
 
     backend_.nbv_->constructPairlist(
@@ -205,7 +219,7 @@ void GmxNBForceCalculatorCpu::CpuImpl::compute(gmx::ArrayRef<const gmx::RVec> co
             gmx::InteractionLocality::Local,
             backend_.interactionConst_,
             backend_.stepWork_,
-            enbvClearFYes,
+            gmx::enbvClearFYes,
             backend_.forcerec_.shift_vec,
             backend_.enerd_.grpp.energyGroupPairTerms[backend_.forcerec_.haveBuckingham ? NonBondedEnergyTerms::BuckinghamSR
                                                                                         : NonBondedEnergyTerms::LJSR],

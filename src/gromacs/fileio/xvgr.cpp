@@ -40,12 +40,16 @@
 #include <cstddef>
 #include <cstring>
 
+#include <algorithm>
 #include <array>
+#include <iterator>
 #include <string>
 
 #include "gromacs/fileio/gmxfio.h"
 #include "gromacs/fileio/oenv.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/mdspan/layouts.h"
+#include "gromacs/mdspan/mdspan.h"
 #include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/binaryinformation.h"
@@ -68,7 +72,7 @@ static char* xvgrstr(const std::string& gmx, const gmx_output_env_t* oenv, char*
 {
     /* Supported greek letter names and corresponding xmgrace/xmgr symbols */
     const char* sym[]  = { "beta",  "chi", "delta", "eta", "lambda", "mu",
-                          "omega", "phi", "psi",   "rho", "theta",  nullptr };
+                           "omega", "phi", "psi",   "rho", "theta",  nullptr };
     const char  symc[] = { 'b', 'c', 'd', 'h', 'l', 'm', 'w', 'f', 'y', 'r', 'q', '\0' };
     gmx_bool    bXVGR;
     int         g, b, i;
@@ -830,7 +834,7 @@ readXvgTimeSeries(const std::filesystem::path& fn, std::optional<real> startTime
     const int numRows    = fullDataSet.extent(0);
     const int numColumns = fullDataSet.extent(1);
     gmx::MultiDimArray<std::vector<double>, gmx::dynamicExtents2D> reducedDataSet(numRows, numColumns);
-    int                                                            reducedRows = 0;
+    int reducedRows = 0;
     for (std::ptrdiff_t row = 0; row < numRows; ++row)
     {
         const bool timeLargerThanStartTime = !startTime.has_value() || (fullDataSet(row, 0) > *startTime);

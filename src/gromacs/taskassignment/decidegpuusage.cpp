@@ -48,7 +48,9 @@
 #include <cstring>
 
 #include <algorithm>
+#include <memory>
 #include <string>
+#include <vector>
 
 #include "gromacs/ewald/pme.h"
 #include "gromacs/hardware/cpuinfo.h"
@@ -56,17 +58,23 @@
 #include "gromacs/hardware/hardwaretopology.h"
 #include "gromacs/hardware/hw_info.h"
 #include "gromacs/listed_forces/listed_forces_gpu.h"
+#include "gromacs/mdlib/constr.h"
 #include "gromacs/mdlib/gmx_omp_nthreads.h"
 #include "gromacs/mdlib/update_constrain_gpu.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/mdtypes/mdrunoptions.h"
+#include "gromacs/mdtypes/pull_params.h"
 #include "gromacs/pulling/pull.h"
 #include "gromacs/taskassignment/taskassignment.h"
+#include "gromacs/topology/ifunc.h"
 #include "gromacs/topology/mtop_util.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/topology/topology_enums.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/baseversion.h"
+#include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/gmxassert.h"
@@ -98,10 +106,10 @@ const char* const g_specifyEverythingFormatString =
 #    elif GMX_GPU_SYCL && GMX_SYCL_DPCPP
         // https://github.com/intel/llvm/blob/sycl/sycl/doc/EnvironmentVariables.md
         "ONEAPI_DEVICE_SELECTOR"
-#    elif GMX_GPU_SYCL && GMX_SYCL_HIPSYCL && GMX_HIPSYCL_HAVE_HIP_TARGET || GMX_GPU_HIP
+#    elif GMX_GPU_SYCL && GMX_SYCL_ACPP && GMX_ACPP_HAVE_HIP_TARGET || GMX_GPU_HIP
         // https://rocm.docs.amd.com/en/latest/conceptual/gpu-isolation.html
         "ROCR_VISIBLE_DEVICES"
-#    elif GMX_GPU_SYCL && GMX_SYCL_HIPSYCL && GMX_HIPSYCL_HAVE_CUDA_TARGET
+#    elif GMX_GPU_SYCL && GMX_SYCL_ACPP && GMX_ACPP_HAVE_CUDA_TARGET
         "CUDA_VISIBLE_DEVIES"
 #    else
 #        error "Unreachable branch"
@@ -186,6 +194,7 @@ static bool canUseGpusForPme(const bool        useGpuForNonbonded,
     // Before changing the prefix string, make sure that it is not searched for in regression tests.
     errorReasons.startContext("Cannot compute PME interactions on a GPU, because:");
     errorReasons.appendIf(!useGpuForNonbonded, "Nonbonded interactions must also run on GPUs.");
+    errorReasons.appendIf(GMX_GPU_HIP, "PME with HIP not implemented yet");
     errorReasons.appendIf(!pme_gpu_supports_build(&tempString), tempString);
     errorReasons.appendIf(!pme_gpu_supports_input(inputrec, &tempString), tempString);
     if (!decideWhetherToUseGpusForPmeFft(pmeFftTarget))
@@ -377,7 +386,7 @@ bool decideWhetherToUseGpusForNonbonded(const TaskTarget          nonbondedTarge
         if (nonbondedTarget == TaskTarget::Gpu)
         {
             GMX_THROW(InconsistentInputError(
-                    "Nonbonded interactions on the GPU and binary reprocibility were required. "
+                    "Nonbonded interactions on the GPU and binary reproducibility were required. "
                     "These requirements are not compatible."));
         }
 
@@ -739,7 +748,10 @@ bool decideWhetherToUseGpuForUpdate(const bool           isDomainDecomposition,
     errorReasons.appendIf(haveFrozenAtoms,
                           // There is a known bug with frozen atoms and GPU update, see Issue #3920.
                           "Frozen atoms not supported.");
-
+    errorReasons.appendIf(hasAnyConstraints
+                                  && hasTriangleConstraints(
+                                          mtop, flexibleConstraintTreatment(EI_DYNAMICS(inputrec.eI))),
+                          "Triangle constraints are not supported.");
     errorReasons.finishContext();
 
     if (!errorReasons.isEmpty())
@@ -761,6 +773,7 @@ bool decideWhetherToUseGpuForUpdate(const bool           isDomainDecomposition,
 
 bool decideWhetherDirectGpuCommunicationCanBeUsed(const DevelopmentFeatureFlags& devFlags,
                                                   bool                           haveMts,
+                                                  bool                           useReplicaExchange,
                                                   bool                           haveSwapCoords,
                                                   const gmx::MDLogger&           mdlog)
 {
@@ -789,6 +802,7 @@ bool decideWhetherDirectGpuCommunicationCanBeUsed(const DevelopmentFeatureFlags&
     gmx::MessageStringCollector errorReasons;
     errorReasons.startContext("GPU direct communication can not be activated because:");
     errorReasons.appendIf(haveMts, "MTS is not supported.");
+    errorReasons.appendIf(useReplicaExchange, "Replica exchange is not supported.");
     errorReasons.appendIf(haveSwapCoords, "Swap-coords is not supported.");
     errorReasons.finishContext();
 

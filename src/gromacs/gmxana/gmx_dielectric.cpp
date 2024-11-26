@@ -39,22 +39,33 @@
 #include <cstring>
 
 #include <algorithm>
+#include <array>
+#include <filesystem>
+#include <string>
 
+#include "gromacs/commandline/filenm.h"
+#include "gromacs/commandline/pargs.h"
 #include "gromacs/commandline/viewit.h"
 #include "gromacs/correlationfunctions/expfit.h"
 #include "gromacs/correlationfunctions/integrate.h"
 #include "gromacs/fft/fft.h"
+#include "gromacs/fileio/filetypes.h"
 #include "gromacs/fileio/xvgr.h"
 #include "gromacs/gmxana/gmx_ana.h"
 #include "gromacs/gmxana/gstat.h"
 #include "gromacs/math/gmxcomplex.h"
 #include "gromacs/math/units.h"
 #include "gromacs/math/utilities.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/arraysize.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/futil.h"
 #include "gromacs/utility/pleasecite.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
+
+struct gmx_output_env_t;
 
 /* Determines at which point in the array the fit should start */
 static int calc_nbegin(int nx, real x[], real tbegin)
@@ -289,15 +300,15 @@ int gmx_dielectric(int argc, char* argv[])
     real        lambda;
     t_pargs     pa[] = {
         { "-x1",
-          FALSE,
-          etBOOL,
-          { &bX },
-          "use first column as [IT]x[it]-axis rather than first data set" },
+              FALSE,
+              etBOOL,
+              { &bX },
+              "use first column as [IT]x[it]-axis rather than first data set" },
         { "-eint",
-          FALSE,
-          etREAL,
-          { &tendInt },
-          "Time to end the integration of the data and start to use the fit" },
+              FALSE,
+              etREAL,
+              { &tendInt },
+              "Time to end the integration of the data and start to use the fit" },
         { "-bfit", FALSE, etREAL, { &tbegin }, "Begin time of fit" },
         { "-efit", FALSE, etREAL, { &tend }, "End time of fit" },
         { "-tail", FALSE, etREAL, { &tail }, "Length of function including data and tail from fit" },
@@ -306,16 +317,16 @@ int gmx_dielectric(int argc, char* argv[])
         { "-tau2", FALSE, etREAL, { &tau2 }, "Start value for fit parameter [GRK]tau[grk]2" },
         { "-eps0", FALSE, etREAL, { &eps0 }, "[GRK]epsilon[grk]0 of your liquid" },
         { "-epsRF",
-          FALSE,
-          etREAL,
-          { &epsRF },
-          "[GRK]epsilon[grk] of the reaction field used in your simulation. A value of 0 means "
-          "infinity." },
+              FALSE,
+              etREAL,
+              { &epsRF },
+              "[GRK]epsilon[grk] of the reaction field used in your simulation. A value of 0 means "
+                  "infinity." },
         { "-fix",
-          FALSE,
-          etINT,
-          { &fix },
-          "Fix parameters at their start values, A (2), tau1 (1), or tau2 (4)" },
+              FALSE,
+              etINT,
+              { &fix },
+              "Fix parameters at their start values, A (2), tau1 (1), or tau2 (4)" },
         { "-ffn", FALSE, etENUM, { s_ffn }, "Fit function" },
         { "-nsmooth", FALSE, etINT, { &nsmooth }, "Number of points for smoothing" }
     };

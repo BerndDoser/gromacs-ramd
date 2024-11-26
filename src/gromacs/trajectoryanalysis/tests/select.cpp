@@ -50,13 +50,21 @@
 
 #include "gromacs/trajectoryanalysis/modules/select.h"
 
+#include <string>
+
 #include <gtest/gtest.h>
+
+#include "gromacs/utility/arrayref.h"
 
 #include "testutils/cmdlinetest.h"
 #include "testutils/textblockmatchers.h"
 
 #include "moduletest.h"
 
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
@@ -151,3 +159,5 @@ TEST_F(SelectModuleTest, WritesResidueIndices)
 }
 
 } // namespace
+} // namespace test
+} // namespace gmx

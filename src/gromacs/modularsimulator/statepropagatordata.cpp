@@ -42,6 +42,13 @@
 
 #include "statepropagatordata.h"
 
+#include <cmath>
+
+#include <algorithm>
+#include <filesystem>
+#include <functional>
+#include <utility>
+
 #include "gromacs/commandline/filenm.h"
 #include "gromacs/domdec/collect.h"
 #include "gromacs/domdec/domdec.h"
@@ -57,21 +64,34 @@
 #include "gromacs/mdtypes/forcebuffers.h"
 #include "gromacs/mdtypes/forcerec.h"
 #include "gromacs/mdtypes/inputrec.h"
+#include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/mdrunoptions.h"
+#include "gromacs/mdtypes/observablesreducer.h"
 #include "gromacs/mdtypes/state.h"
+#include "gromacs/modularsimulator/modularsimulatorinterfaces.h"
 #include "gromacs/pbcutil/pbc.h"
+#include "gromacs/timing/wallcycle.h"
 #include "gromacs/topology/atoms.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/topology/topology_enums.h"
 #include "gromacs/trajectory/trajectoryframe.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/enumerationhelpers.h"
+#include "gromacs/utility/gmxassert.h"
 
 #include "freeenergyperturbationdata.h"
 #include "modularsimulator.h"
 #include "simulatoralgorithm.h"
 
+struct ObservablesHistory;
+
 namespace gmx
 {
+enum class ReferenceTemperatureChangeAlgorithm;
+template<CheckpointDataOperation operation>
+class CheckpointData;
+
 /*! \internal
  * \brief Helper object to scale velocities according to reference temperature change
  */
@@ -470,7 +490,8 @@ StatePropagatorData::Element::registerTrajectoryWriterCallback(TrajectoryEvent e
 {
     if (event == TrajectoryEvent::StateWritingStep)
     {
-        return [this](gmx_mdoutf* outf, Step step, Time time, bool writeTrajectory, bool gmx_unused writeLog) {
+        return [this](gmx_mdoutf* outf, Step step, Time time, bool writeTrajectory, bool gmx_unused writeLog)
+        {
             if (writeTrajectory)
             {
                 write(outf, step, time);
@@ -600,7 +621,7 @@ void StatePropagatorData::doCheckpointData(CheckpointData<operation>* checkpoint
 }
 
 void StatePropagatorData::Element::saveCheckpointState(std::optional<WriteCheckpointData> checkpointData,
-                                                       const t_commrec*                   cr)
+                                                       const t_commrec* cr)
 {
     if (haveDDAtomOrdering(*cr))
     {
@@ -659,7 +680,7 @@ static void updateGlobalState(t_state*                      globalState,
 }
 
 void StatePropagatorData::Element::restoreCheckpointState(std::optional<ReadCheckpointData> checkpointData,
-                                                          const t_commrec*                  cr)
+                                                          const t_commrec* cr)
 {
     if (MAIN(cr))
     {
@@ -756,7 +777,8 @@ void StatePropagatorData::Element::trajectoryWriterTeardown(gmx_mdoutf* gmx_unus
 
 std::optional<SignallerCallback> StatePropagatorData::Element::registerLastStepCallback()
 {
-    return [this](Step step, Time /*time*/) {
+    return [this](Step step, Time /*time*/)
+    {
         lastStep_               = step;
         isRegularSimulationEnd_ = (step == lastPlannedStep_);
     };
@@ -801,12 +823,12 @@ void StatePropagatorData::Element::setFreeEnergyPerturbationData(FreeEnergyPertu
 }
 
 ISimulatorElement* StatePropagatorData::Element::getElementPointerImpl(
-        LegacySimulatorData gmx_unused*        legacySimulatorData,
+        LegacySimulatorData gmx_unused*                    legacySimulatorData,
         ModularSimulatorAlgorithmBuilderHelper gmx_unused* builderHelper,
         StatePropagatorData*                               statePropagatorData,
-        EnergyData gmx_unused*      energyData,
-        FreeEnergyPerturbationData* freeEnergyPerturbationData,
-        GlobalCommunicationHelper gmx_unused* globalCommunicationHelper,
+        EnergyData gmx_unused*                             energyData,
+        FreeEnergyPerturbationData*                        freeEnergyPerturbationData,
+        GlobalCommunicationHelper gmx_unused*              globalCommunicationHelper,
         ObservablesReducer* /*observablesReducer*/)
 {
     statePropagatorData->element()->setFreeEnergyPerturbationData(freeEnergyPerturbationData);

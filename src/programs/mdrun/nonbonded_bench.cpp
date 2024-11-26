@@ -42,6 +42,7 @@
 
 #include "nonbonded_bench.h"
 
+#include <memory>
 #include <vector>
 
 #include "gromacs/commandline/cmdlineoptionsmodule.h"
@@ -50,12 +51,16 @@
 #include "gromacs/options/basicoptions.h"
 #include "gromacs/options/filenameoption.h"
 #include "gromacs/options/ioptionscontainer.h"
+#include "gromacs/options/optionfiletype.h"
 #include "gromacs/selection/selectionoptionbehavior.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/arraysize.h"
 #include "gromacs/utility/enumerationhelpers.h"
+#include "gromacs/utility/real.h"
 
 namespace gmx
 {
+class CommandLineModuleSettings;
 
 
 namespace
@@ -73,8 +78,8 @@ public:
     int  run() override;
 
 private:
-    int                       sizeFactor_ = 1;
-    Nbnxm::KernelBenchOptions benchmarkOptions_;
+    int                     sizeFactor_ = 1;
+    NbnxmKernelBenchOptions benchmarkOptions_;
 };
 
 void NonbondedBenchmark::initOptions(IOptionsContainer* options, ICommandLineOptionsModuleSettings* settings)
@@ -156,13 +161,13 @@ void NonbondedBenchmark::initOptions(IOptionsContainer* options, ICommandLineOpt
 
     settings->setHelpText(desc);
 
-    static const EnumerationArray<Nbnxm::BenchMarkKernels, const char*> c_nbnxmSimdStrings = {
+    static const EnumerationArray<NbnxmBenchMarkKernels, const char*> c_nbnxmSimdStrings = {
         { "auto", "no", "4xm", "2xmm" }
     };
-    static const EnumerationArray<Nbnxm::BenchMarkCombRule, const char*> c_combRuleStrings = {
+    static const EnumerationArray<NbnxmBenchMarkCombRule, const char*> c_combRuleStrings = {
         { "geometric", "lb", "none" }
     };
-    static const EnumerationArray<Nbnxm::BenchMarkCoulomb, const char*> c_coulombTypeStrings = {
+    static const EnumerationArray<NbnxmBenchMarkCoulomb, const char*> c_coulombTypeStrings = {
         { "ewald", "reaction-field" }
     };
 
@@ -170,12 +175,12 @@ void NonbondedBenchmark::initOptions(IOptionsContainer* options, ICommandLineOpt
             IntegerOption("size").store(&sizeFactor_).description("The system size is 3000 atoms times this value"));
     options->addOption(
             IntegerOption("nt").store(&benchmarkOptions_.numThreads).description("The number of OpenMP threads to use"));
-    options->addOption(EnumOption<Nbnxm::BenchMarkKernels>("simd")
+    options->addOption(EnumOption<NbnxmBenchMarkKernels>("simd")
                                .store(&benchmarkOptions_.nbnxmSimd)
                                .enumValue(c_nbnxmSimdStrings)
                                .description("SIMD type, auto runs all supported SIMD setups or no "
                                             "SIMD when SIMD is not supported"));
-    options->addOption(EnumOption<Nbnxm::BenchMarkCoulomb>("coulomb")
+    options->addOption(EnumOption<NbnxmBenchMarkCoulomb>("coulomb")
                                .store(&benchmarkOptions_.coulombType)
                                .enumValue(c_coulombTypeStrings)
                                .description("The functional form for the Coulomb interactions"));
@@ -183,7 +188,7 @@ void NonbondedBenchmark::initOptions(IOptionsContainer* options, ICommandLineOpt
             BooleanOption("table")
                     .store(&benchmarkOptions_.useTabulatedEwaldCorr)
                     .description("Use lookup table for Ewald correction instead of analytical"));
-    options->addOption(EnumOption<Nbnxm::BenchMarkCombRule>("combrule")
+    options->addOption(EnumOption<NbnxmBenchMarkCombRule>("combrule")
                                .store(&benchmarkOptions_.ljCombinationRule)
                                .enumValue(c_combRuleStrings)
                                .description("The LJ combination rule"));
@@ -220,13 +225,13 @@ void NonbondedBenchmark::initOptions(IOptionsContainer* options, ICommandLineOpt
 void NonbondedBenchmark::optionsFinished()
 {
     // We compute the Ewald coefficient here to avoid a dependency of the Nbnxm on the Ewald module
-    const real ewald_rtol          = 1e-5;
+    const real ewald_rtol = 1e-5;
     benchmarkOptions_.ewaldcoeff_q = calc_ewaldcoeff_q(benchmarkOptions_.pairlistCutoff, ewald_rtol);
 }
 
 int NonbondedBenchmark::run()
 {
-    Nbnxm::bench(sizeFactor_, benchmarkOptions_);
+    bench(sizeFactor_, benchmarkOptions_);
 
     return 0;
 }

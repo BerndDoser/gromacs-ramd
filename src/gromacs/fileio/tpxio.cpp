@@ -33,14 +33,33 @@
  */
 #include "gmxpre.h"
 
+#include "gromacs/math/vectypes.h"
+#include "gromacs/topology/atoms.h"
+#include "gromacs/topology/forcefieldparameters.h"
+#include "gromacs/topology/idef.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/basedefinitions.h"
+#include "gromacs/utility/enumerationhelpers.h"
+#include "gromacs/utility/keyvaluetree.h"
+#include "gromacs/utility/listoflists.h"
+#include "gromacs/utility/real.h"
+#include "gromacs/utility/stringutil.h"
+
 /* This file is completely threadsafe - keep it that way! */
 
+#include <cinttypes>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
 #include <algorithm>
+#include <array>
+#include <bitset>
+#include <filesystem>
 #include <memory>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "gromacs/applied_forces/awh/read_params.h"
@@ -179,7 +198,10 @@ enum tpxv
     tpxv_AwhTargetMetricScaling,      /**< Add AWH friction optimized target distribution */
     tpxv_VerletBufferPressureTol,     /**< Add Verlet buffer pressure tolerance */
     tpxv_RAMD,                        /**< Add RAMD information */
-    tpxv_Count                        /**< the total number of tpxv versions */
+    tpxv_HandleMartiniBondedBStateParametersProperly, /**< Handle restraint angles, restraint dihedrals, and combined bending-torsion parameters properly */
+    tpxv_RefScaleMultipleCOMs, /**< Add multiple COM groups for refcoord-scale */
+    tpxv_InputHistogramCounts, /**< Provide input histogram counts for current expanded ensemble state */
+    tpxv_Count                 /**< the total number of tpxv versions */
 };
 
 /*! \brief Version number of the file format written to run input
@@ -446,9 +468,13 @@ static void do_expandedvals(gmx::ISerializer* serializer, t_expanded* expand, t_
     {
         if (n_lambda > 0)
         {
-            expand->init_lambda_weights.resize(n_lambda);
-            serializer->doRealArray(expand->init_lambda_weights.data(), n_lambda);
-            serializer->doBool(&expand->bInit_weights);
+            expand->initLambdaWeights.resize(n_lambda);
+            serializer->doRealArray(expand->initLambdaWeights.data(), n_lambda);
+            if (file_version < tpxv_InputHistogramCounts)
+            {
+                bool dummy;
+                serializer->doBool(&dummy); // read the former bInit_weights value
+            }
         }
 
         serializer->doInt(&expand->nstexpanded);
@@ -473,6 +499,24 @@ static void do_expandedvals(gmx::ISerializer* serializer, t_expanded* expand, t_
         serializer->doInt(&expand->equil_n_at_lam);
         serializer->doReal(&expand->equil_wl_delta);
         serializer->doReal(&expand->equil_ratio);
+    }
+    if (file_version >= tpxv_InputHistogramCounts)
+    {
+        if (n_lambda > 0)
+        {
+            expand->initLambdaCounts.resize(n_lambda);
+            serializer->doRealArray(expand->initLambdaCounts.data(), n_lambda);
+            expand->initWlHistogramCounts.resize(n_lambda);
+            serializer->doRealArray(expand->initWlHistogramCounts.data(), n_lambda);
+        }
+    }
+    else
+    {
+        if (n_lambda > 0)
+        {
+            expand->initLambdaCounts.resize(n_lambda, 0);
+            expand->initWlHistogramCounts.resize(n_lambda, 0);
+        }
     }
 }
 
@@ -1392,8 +1436,24 @@ static void do_inputrec(gmx::ISerializer* serializer, t_inputrec* ir, int file_v
     serializer->doRvec(&ir->pressureCouplingOptions.compress[YY]);
     serializer->doRvec(&ir->pressureCouplingOptions.compress[ZZ]);
     serializer->doEnumAsInt(&ir->pressureCouplingOptions.refcoord_scaling);
-    serializer->doRvec(&ir->posres_com);
-    serializer->doRvec(&ir->posres_comB);
+
+    auto numPosresComGroups = static_cast<int>(ir->posresCom.size());
+    if (file_version >= tpxv_RefScaleMultipleCOMs)
+    {
+        serializer->doInt(&numPosresComGroups);
+    }
+    else
+    {
+        numPosresComGroups = 1;
+    }
+
+    if (serializer->reading())
+    {
+        ir->posresCom.resize(numPosresComGroups);
+        ir->posresComB.resize(numPosresComGroups);
+    }
+    serializer->doRvecArray(as_rvec_array(ir->posresCom.data()), numPosresComGroups);
+    serializer->doRvecArray(as_rvec_array(ir->posresComB.data()), numPosresComGroups);
 
     if (file_version < tpxv_Pre96Version79)
     {
@@ -1916,6 +1976,19 @@ static void do_iparams(gmx::ISerializer* serializer, t_functype ftype, t_iparams
         case F_RESTRANGLES:
             serializer->doReal(&iparams->harmonic.rA);
             serializer->doReal(&iparams->harmonic.krA);
+            if (file_version < tpxv_HandleMartiniBondedBStateParametersProperly && serializer->reading())
+            {
+                // Makes old tpr files work, because it's very likely
+                // that FEP on such interactions was never intended
+                // because such FEP is not implemented.
+                iparams->harmonic.rB  = iparams->harmonic.rA;
+                iparams->harmonic.krB = iparams->harmonic.krA;
+            }
+            else
+            {
+                serializer->doReal(&iparams->harmonic.rB);
+                serializer->doReal(&iparams->harmonic.krB);
+            }
             break;
         case F_LINEAR_ANGLES:
             serializer->doReal(&iparams->linangle.klinA);
@@ -2070,6 +2143,19 @@ static void do_iparams(gmx::ISerializer* serializer, t_functype ftype, t_iparams
         case F_RESTRDIHS:
             serializer->doReal(&iparams->pdihs.phiA);
             serializer->doReal(&iparams->pdihs.cpA);
+            if (file_version < tpxv_HandleMartiniBondedBStateParametersProperly && serializer->reading())
+            {
+                // Makes old tpr files work, because it's very likely
+                // that FEP on such interactions was never intended
+                // because such FEP is not implemented.
+                iparams->pdihs.phiB = iparams->pdihs.phiA;
+                iparams->pdihs.cpB  = iparams->pdihs.cpA;
+            }
+            else
+            {
+                serializer->doReal(&iparams->pdihs.phiB);
+                serializer->doReal(&iparams->pdihs.cpB);
+            }
             break;
         case F_DISRES:
             serializer->doInt(&iparams->disres.label);
@@ -2121,7 +2207,22 @@ static void do_iparams(gmx::ISerializer* serializer, t_functype ftype, t_iparams
             serializer->doReal(&iparams->fbposres.r);
             serializer->doReal(&iparams->fbposres.k);
             break;
-        case F_CBTDIHS: serializer->doRealArray(iparams->cbtdihs.cbtcA, NR_CBTDIHS); break;
+        case F_CBTDIHS:
+            serializer->doRealArray(iparams->cbtdihs.cbtcA, NR_CBTDIHS);
+            if (file_version < tpxv_HandleMartiniBondedBStateParametersProperly && serializer->reading())
+            {
+                // Makes old tpr files work, because it's very likely
+                // that FEP on such interactions was never intended
+                // because such FEP is not implemented.
+                std::copy(std::begin(iparams->cbtdihs.cbtcA),
+                          std::end(iparams->cbtdihs.cbtcA),
+                          std::begin(iparams->cbtdihs.cbtcB));
+            }
+            else
+            {
+                serializer->doRealArray(iparams->cbtdihs.cbtcB, NR_CBTDIHS);
+            }
+            break;
         case F_RBDIHS:
             // Fall-through intended
         case F_FOURDIHS:
@@ -3245,6 +3346,17 @@ static void do_tpx_finalize(TpxFileHeader* tpx, t_inputrec* ir, t_state* state, 
                 ir->eDisre = !mtop->moltype[0].ilist[F_DISRES].empty()
                                      ? DistanceRestraintRefinement::Simple
                                      : DistanceRestraintRefinement::None;
+            }
+
+            if (tpx->fileVersion < tpxv_RefScaleMultipleCOMs
+                && ((gmx_mtop_ftype_count(*mtop, F_POSRES) == 0 && gmx_mtop_ftype_count(*mtop, F_FBPOSRES) == 0)
+                    || ir->pressureCouplingOptions.refcoord_scaling != RefCoordScaling::Com))
+            {
+                // We do not have position restraints or we do not have COM ref-coord scaling
+                // (and with ref-coord scaling option All no COMs are used),
+                // so we do not need the position restraint COMs
+                ir->posresCom.clear();
+                ir->posresComB.clear();
             }
         }
     }

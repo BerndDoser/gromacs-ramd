@@ -46,6 +46,10 @@
 #include <cstring>
 
 #include <algorithm>
+#include <iterator>
+#include <utility>
+
+#include <gtest/gtest.h>
 
 #include "gromacs/domdec/domdec.h"
 #include "gromacs/ewald/pme_coordinate_receiver_gpu.h"
@@ -54,6 +58,7 @@
 #include "gromacs/ewald/pme_gpu_constants.h"
 #include "gromacs/ewald/pme_gpu_internal.h"
 #include "gromacs/ewald/pme_gpu_staging.h"
+#include "gromacs/ewald/pme_gpu_types_host.h"
 #include "gromacs/ewald/pme_grid.h"
 #include "gromacs/ewald/pme_internal.h"
 #include "gromacs/ewald/pme_redistribute.h"
@@ -62,10 +67,15 @@
 #include "gromacs/fft/parallel_3dfft.h"
 #include "gromacs/gpu_utils/device_context.h"
 #include "gromacs/gpu_utils/gpu_utils.h"
+#include "gromacs/gpu_utils/hostallocator.h"
 #include "gromacs/math/boxmatrix.h"
 #include "gromacs/mdtypes/commrec.h"
+#include "gromacs/mdtypes/locality.h"
+#include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/logger.h"
@@ -76,6 +86,9 @@
 #include "testutils/testinit.h"
 
 class DeviceContext;
+class DeviceStream;
+class GpuEventSynchronizer;
+struct t_inputrec;
 
 namespace gmx
 {
@@ -193,7 +206,7 @@ PmeSafePointer pmeInitEmpty(const t_inputrec* inputRec)
 }
 
 //! Make a GPU state-propagator manager
-std::unique_ptr<StatePropagatorDataGpu> makeStatePropagatorDataGpu(const gmx_pme_t&     pme,
+std::unique_ptr<StatePropagatorDataGpu> makeStatePropagatorDataGpu(const gmx_pme_t& pme,
                                                                    const DeviceContext* deviceContext,
                                                                    const DeviceStream* deviceStream)
 {
@@ -201,7 +214,7 @@ std::unique_ptr<StatePropagatorDataGpu> makeStatePropagatorDataGpu(const gmx_pme
     // TODO: Special constructor for PME-only rank / PME-tests is used here. There should be a mechanism to
     //       restrict one from using other constructor here.
     return std::make_unique<StatePropagatorDataGpu>(
-            deviceStream, *deviceContext, GpuApiCallBehavior::Sync, pme_gpu_get_block_size(&pme), nullptr);
+            deviceStream, *deviceContext, GpuApiCallBehavior::Sync, pme_gpu_get_block_size(&pme), false, nullptr);
 }
 
 //! PME initialization with atom data
@@ -214,6 +227,7 @@ void pmeInitAtoms(gmx_pme_t*               pme,
     const Index atomCount = coordinates.size();
     GMX_RELEASE_ASSERT(atomCount == gmx::ssize(charges), "Mismatch in atom data");
     PmeAtomComm* atc = nullptr;
+    t_commrec    dummyCommrec;
 
     switch (mode)
     {
@@ -232,7 +246,7 @@ void pmeInitAtoms(gmx_pme_t*               pme,
             atc->setNumAtoms(atomCount);
             gmx_pme_reinit_atoms(pme, atomCount, charges, {});
 
-            stateGpu->reinit(atomCount, atomCount);
+            stateGpu->reinit(atomCount, atomCount, dummyCommrec, 0);
             stateGpu->copyCoordinatesToGpu(arrayRefFromArray(coordinates.data(), coordinates.size()),
                                            gmx::AtomLocality::Local);
             pme_gpu_set_kernelparam_coordinates(pme->gpu, stateGpu->getCoordinates());

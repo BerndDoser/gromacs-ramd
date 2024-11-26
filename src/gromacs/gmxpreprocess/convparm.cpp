@@ -40,7 +40,10 @@
 #include <cmath>
 #include <cstring>
 
+#include <array>
+#include <filesystem>
 #include <memory>
+#include <vector>
 
 #include "gromacs/gmxpreprocess/gpp_atomtype.h"
 #include "gromacs/gmxpreprocess/grompp_impl.h"
@@ -50,10 +53,16 @@
 #include "gromacs/math/units.h"
 #include "gromacs/math/utilities.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/mdtypes/md_enums.h"
+#include "gromacs/topology/forcefieldparameters.h"
+#include "gromacs/topology/idef.h"
 #include "gromacs/topology/ifunc.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/fatalerror.h"
+#include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/smalloc.h"
 
 static int round_check(real r, int limit, int ftype, const char* name)
@@ -130,6 +139,10 @@ static int assign_param(t_functype                ftype,
 
     if (all_param_zero)
     {
+        // Note that F_VSITES1 and F_CONNBONDS use no parameters so
+        // have all parameters zero at this point, but elsewhere we
+        // rely on the fact that the parameter set is assigned even
+        // though it is all zero.
         if (IS_ANGLE(ftype) || IS_RESTRAINT_TYPE(ftype) || ftype == F_IDIHS || ftype == F_PDIHS
             || ftype == F_PIDIHS || ftype == F_RBDIHS || ftype == F_FOURDIHS)
         {
@@ -213,14 +226,11 @@ static int assign_param(t_functype                ftype,
         case F_ANGLES:
         case F_HARMONIC:
         case F_IDIHS:
+        case F_RESTRANGLES:
             newparam->harmonic.rA  = old[0];
             newparam->harmonic.krA = old[1];
             newparam->harmonic.rB  = old[2];
             newparam->harmonic.krB = old[3];
-            break;
-        case F_RESTRANGLES:
-            newparam->harmonic.rA  = old[0];
-            newparam->harmonic.krA = old[1];
             break;
         case F_MORSE:
             newparam->morse.b0A   = old[0];
@@ -304,6 +314,8 @@ static int assign_param(t_functype                ftype,
         case F_RESTRDIHS:
             newparam->pdihs.phiA = old[0];
             newparam->pdihs.cpA  = old[1];
+            newparam->pdihs.phiB = old[2];
+            newparam->pdihs.cpB  = old[3];
             break;
         case F_POSRES:
             newparam->posres.fcA[XX]   = old[0];
@@ -370,6 +382,7 @@ static int assign_param(t_functype                ftype,
             for (int i = 0; (i < NR_CBTDIHS); i++)
             {
                 newparam->cbtdihs.cbtcA[i] = old[i];
+                newparam->cbtdihs.cbtcB[i] = old[i + NR_CBTDIHS];
             }
             break;
         case F_FOURDIHS:
@@ -531,6 +544,13 @@ static void enter_function(const InteractionsOfType* p,
     }
 }
 
+bool shouldConvertInteractionType(int ftype)
+{
+    const unsigned long flags = interaction_function[ftype].flags;
+    return ((ftype != F_LJ) && (ftype != F_BHAM)
+            && ((flags & IF_BOND) != 0u || (flags & IF_VSITE) != 0u || (flags & IF_CONSTRAINT) != 0u));
+}
+
 void convertInteractionsOfType(int                                      atnr,
                                gmx::ArrayRef<const InteractionsOfType>  nbtypes,
                                gmx::ArrayRef<const MoleculeInformation> mi,
@@ -541,7 +561,6 @@ void convertInteractionsOfType(int                                      atnr,
                                gmx_mtop_t*                              mtop)
 {
     int             i;
-    unsigned long   flags;
     gmx_ffparams_t* ffp;
     gmx_moltype_t*  molt;
 
@@ -564,9 +583,7 @@ void convertInteractionsOfType(int                                      atnr,
 
             gmx::ArrayRef<const InteractionsOfType> interactions = mi[mt].interactions;
 
-            flags = interaction_function[i].flags;
-            if ((i != F_LJ) && (i != F_BHAM)
-                && ((flags & IF_BOND) || (flags & IF_VSITE) || (flags & IF_CONSTRAINT)))
+            if (shouldConvertInteractionType(i))
             {
                 enter_function(&(interactions[i]),
                                static_cast<t_functype>(i),
@@ -594,7 +611,7 @@ void convertInteractionsOfType(int                                      atnr,
 
             if (!interactions[i].interactionTypes.empty())
             {
-                flags = interaction_function[i].flags;
+                const unsigned long flags = interaction_function[i].flags;
                 /* For intermolecular interactions we (currently)
                  * only support potentials.
                  * Constraints and virtual sites would be possible,

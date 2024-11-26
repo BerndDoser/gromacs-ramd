@@ -35,17 +35,14 @@
  *  \brief Define functions for detection and initialization for HIP devices.
  *
  *  \author Paul Bauer <paul.bauer.q@gmail.com>
- *  \author Julio Maia <julio.maia@amd.com>
  */
 
 #include "gmxpre.h"
 
-#include <cstdlib>
-
 #include <hip/hip_profile.h>
 
 #include "gromacs/gpu_utils/hiputils.h"
-#include "gromacs/hardware/device_management.h"
+#include "gromacs/hardware/device_information.h"
 #include "gromacs/utility/logger.h"
 #include "gromacs/utility/stringutil.h"
 

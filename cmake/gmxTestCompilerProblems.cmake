@@ -49,16 +49,16 @@ macro(gmx_test_compiler_problems)
     # cmake feature detection is currently inconsistent: gitlab.kitware.com/cmake/cmake/issues/18869
     # We might want to switch to using feature test macros some time.
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-        if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9)
-            set(cxx_required_version "GCC version 9")
+        if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS ${GMX_GCC_MINIMUM_REQUIRED_VERSION})
+            set(cxx_required_version "GCC version ${GMX_GCC_MINIMUM_REQUIRED_VERSION}")
         endif()
     elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 19.15)
             set(cxx_required_version "Visual Studio 2017")
         endif()
     elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 5)
-            set(cxx_required_version "Clang 5")
+        if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS ${GMX_CLANG_MINIMUM_REQUIRED_VERSION})
+            set(cxx_required_version "Clang ${GMX_CLANG_MINIMUM_REQUIRED_VERSION}")
         endif()
     elseif(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
         # All versions of IntelLLVM (a.k.a. DPCPP) compiler so far support C++17
@@ -74,7 +74,7 @@ macro(gmx_test_compiler_problems)
     endif()
     if (cxx_required_version)
         message(FATAL_ERROR "${cxx_required_version} or later required. "
-                            "Earlier versions don't have full C++17 support.")
+                            "Earlier versions may not have full C++17 support.")
     endif()
 
     if (CMAKE_CXX_COMPILER_ID MATCHES "Intel" AND NOT CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
@@ -93,7 +93,7 @@ macro(gmx_test_compiler_problems)
 
     if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "XL")
         check_cxx_source_compiles(
-"// Test in-class array initalizers used with constructor initializer lists
+"// Test in-class array initializers used with constructor initializer lists
 struct TestStruct
 {
     float a[3][3] = {{0}}; // in-class initializer

@@ -42,13 +42,16 @@
 
 #include "logging.h"
 
+#include <filesystem>
 #include <memory>
+#include <string>
 
 #include "gromacs/fileio/gmxfio.h"
 #include "gromacs/utility/binaryinformation.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/fatalerror.h"
+#include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/programcontext.h"
 #include "gromacs/utility/smalloc.h"
 

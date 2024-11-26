@@ -43,13 +43,26 @@
  */
 #include "gmxcalculator.h"
 
+#include <algorithm>
+#include <array>
+#include <iterator>
+#include <tuple>
+#include <type_traits>
+
 #include "listed_forces/conversionscommon.h"
 
 #include "gromacs/listed_forces/listed_forces.h"
+#include "gromacs/math/arrayrefwithpadding.h"
+#include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/pbcutil/ishift.h"
 #include "gromacs/timing/wallcycle.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/booltype.h"
 
 #include "nblib/exception.h"
+#include "nblib/listed_forces/bondtypes.h"
+#include "nblib/util/traits.hpp"
+#include "nblib/util/util.hpp"
 
 namespace nblib
 {
@@ -84,7 +97,7 @@ ListedGmxCalculator::ListedGmxCalculator(const ListedInteractionData& interactio
 
     gmxListedForces_ =
             std::make_unique<ListedForces>(*ffparams, 1, numThreads, interactionSelection, nullptr);
-    gmxListedForces_->setup(*idef, nP, false);
+    gmxListedForces_->setup(*idef, nP, false, mdatoms_.cVCM, 0);
 
     wcycle = wallcycle_init(nullptr, 0, &cr);
     set_pbc(&pbc, PbcType::Xyz, box_.legacyMatrix());
@@ -152,7 +165,8 @@ void ListedGmxCalculator::compute(gmx::ArrayRef<const gmx::RVec>     x,
                                 nullptr,
                                 stepWork);
 
-    auto transferEnergy = [&energies, this](auto& interactionElement) {
+    auto transferEnergy = [&energies, this](auto& interactionElement)
+    {
         using InteractionType = typename std::decay_t<decltype(interactionElement)>::type;
         if constexpr (ListedTypeIsImplemented<InteractionType>{})
         {

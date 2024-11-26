@@ -43,12 +43,20 @@
 
 #include "config.h"
 
+#include <cinttypes>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <ctime>
 
 #include <algorithm>
+#include <array>
+#include <filesystem>
 #include <limits>
+#include <memory>
+#include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "gromacs/commandline/filenm.h"
@@ -60,6 +68,8 @@
 #include "gromacs/domdec/partition.h"
 #include "gromacs/ewald/pme_pp.h"
 #include "gromacs/fileio/confio.h"
+#include "gromacs/fileio/enxio.h"
+#include "gromacs/fileio/filetypes.h"
 #include "gromacs/fileio/mtxio.h"
 #include "gromacs/gmxlib/network.h"
 #include "gromacs/gmxlib/nrnb.h"
@@ -67,8 +77,10 @@
 #include "gromacs/linearalgebra/sparsematrix.h"
 #include "gromacs/listed_forces/listed_forces.h"
 #include "gromacs/listed_forces/listed_forces_gpu.h"
+#include "gromacs/math/arrayrefwithpadding.h"
 #include "gromacs/math/functions.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/mdlib/constr.h"
 #include "gromacs/mdlib/coupling.h"
 #include "gromacs/mdlib/ebin.h"
@@ -80,6 +92,7 @@
 #include "gromacs/mdlib/gmx_omp_nthreads.h"
 #include "gromacs/mdlib/md_support.h"
 #include "gromacs/mdlib/mdatoms.h"
+#include "gromacs/mdlib/mdoutf.h"
 #include "gromacs/mdlib/stat.h"
 #include "gromacs/mdlib/tgroup.h"
 #include "gromacs/mdlib/trajectory_writing.h"
@@ -89,6 +102,7 @@
 #include "gromacs/mdrunutility/printtime.h"
 #include "gromacs/mdtypes/checkpointdata.h"
 #include "gromacs/mdtypes/commrec.h"
+#include "gromacs/mdtypes/enerdata.h"
 #include "gromacs/mdtypes/forcebuffers.h"
 #include "gromacs/mdtypes/forcerec.h"
 #include "gromacs/mdtypes/inputrec.h"
@@ -98,21 +112,41 @@
 #include "gromacs/mdtypes/mdrunoptions.h"
 #include "gromacs/mdtypes/multipletimestepping.h"
 #include "gromacs/mdtypes/observablesreducer.h"
+#include "gromacs/mdtypes/simulation_workload.h"
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/taskassignment/include/gromacs/taskassignment/decidesimulationworkload.h"
 #include "gromacs/timing/wallcycle.h"
 #include "gromacs/timing/walltime_accounting.h"
+#include "gromacs/topology/ifunc.h"
 #include "gromacs/topology/mtop_util.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/topology/topology_enums.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/cstringutil.h"
+#include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/fatalerror.h"
+#include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/logger.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
 
 #include "legacysimulator.h"
 #include "shellfc.h"
+
+namespace gmx
+{
+struct MDModulesNotifiers;
+} // namespace gmx
+struct ObservablesHistory;
+struct gmx_edsam;
+struct gmx_enfrot;
+struct gmx_mdoutf;
+struct gmx_multisim_t;
+struct gmx_shellfc_t;
+struct pull_t;
 
 using gmx::ArrayRef;
 using gmx::MDModulesNotifiers;
@@ -1167,18 +1201,20 @@ static double reorder_partsum(const t_commrec*  cr,
      * This conflicts with the spirit of domain decomposition,
      * but to fully optimize this a much more complicated algorithm is required.
      */
-    const int natoms = top_global.natoms;
-    rvec*     fmg;
-    snew(fmg, natoms);
+    const int              natoms = top_global.natoms;
+    std::vector<gmx::RVec> fmg(natoms, { 0.0_real, 0.0_real, 0.0_real });
 
     gmx::ArrayRef<const int> indicesMin = s_min->s.cg_gl;
     int                      i          = 0;
-    for (int a : indicesMin)
+    for (int globalAtomIndex : indicesMin)
     {
-        copy_rvec(fm[i], fmg[a]);
+        if (isValidGlobalAtom(globalAtomIndex))
+        {
+            fmg[globalAtomIndex] = fm[i];
+        }
         i++;
     }
-    gmx_sum(top_global.natoms * 3, fmg[0], cr);
+    gmx_sum(top_global.natoms * 3, reinterpret_cast<real*>(fmg.data()), cr);
 
     /* Now we will determine the part of the sum for the cgs in state s_b */
     gmx::ArrayRef<const int> indicesB = s_b->s.cg_gl;
@@ -1188,23 +1224,25 @@ static double reorder_partsum(const t_commrec*  cr,
     int                                gf = 0;
     gmx::ArrayRef<const unsigned char> grpnrFREEZE =
             top_global.groups.groupNumbers[SimulationAtomGroupType::Freeze];
-    for (int a : indicesB)
+    for (int globalAtomIndex : indicesB)
     {
-        if (!grpnrFREEZE.empty())
+        if (isValidGlobalAtom(globalAtomIndex))
         {
-            gf = grpnrFREEZE[i];
-        }
-        for (int m = 0; m < DIM; m++)
-        {
-            if (!opts->nFreeze[gf][m])
+            if (!grpnrFREEZE.empty())
             {
-                partsum += (fb[i][m] - fmg[a][m]) * fb[i][m];
+                gf = grpnrFREEZE[i];
+            }
+            for (int m = 0; m < DIM; m++)
+            {
+                if (!opts->nFreeze[gf][m])
+                {
+                    partsum += (fb[i][m] - fmg[globalAtomIndex][m]) * fb[i][m];
+                }
             }
         }
+
         i++;
     }
-
-    sfree(fmg);
 
     return partsum;
 }
@@ -1437,6 +1475,7 @@ void LegacySimulator::do_cg()
         fprintf(stderr, "   F-max             = %12.5e on atom %d\n", s_min->fmax, s_min->a_fmax + 1);
         fprintf(stderr, "   F-Norm            = %12.5e\n", s_min->fnorm / sqrtNumAtoms);
         fprintf(stderr, "\n");
+        GMX_ASSERT(fpLog_, "Inconsistent file pointer value");
         /* and copy to the log file too... */
         fprintf(fpLog_, "   F-max             = %12.5e on atom %d\n", s_min->fmax, s_min->a_fmax + 1);
         fprintf(fpLog_, "   F-Norm            = %12.5e\n", s_min->fnorm / sqrtNumAtoms);

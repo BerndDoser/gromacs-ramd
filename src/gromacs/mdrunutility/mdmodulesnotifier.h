@@ -44,7 +44,10 @@
 #define GMX_MDRUNUTILITY_MDMODULESNOTIFIER_H
 
 #include <functional>
+#include <optional>
 #include <vector>
+
+#include "gromacs/utility/basedefinitions.h"
 
 namespace gmx
 {
@@ -57,7 +60,7 @@ namespace gmx
  * information is available when the event occurs. Modules \c
  * subscribe() by providing a callback function that accepts a single
  * parameter of such an event type. The code that handles that event
- * has the responsibilty to call \c notify() afterwards. The
+ * has the responsibility to call \c notify() afterwards. The
  * subscribed modules then receive the callback with the requested
  * event type as an argument.
  *
@@ -96,6 +99,8 @@ public:
     using MDModulesNotifierBase::notify;
     //! Make base class subscription available to this class
     using MDModulesNotifierBase::subscribe;
+    //! Make base class checking subscriptions available to this class
+    using MDModulesNotifierBase::haveSubscribers;
 
     /*! \brief Notifies subscribers of the event described by \c
      * callbackParameter.
@@ -118,6 +123,16 @@ public:
     void subscribe(std::function<void(const CallParameter)> callBackFunction)
     {
         callBackFunctions_.emplace_back(callBackFunction);
+    }
+
+    /*! Returns whether this notification has any subscribers
+     *
+     * \note The dummy argument is there to enable selection of the function on
+     *       template parameter type (using enable_if does not work with clang).
+     */
+    bool haveSubscribers(const std::optional<CallParameter> gmx_unused& dummy = {}) const
+    {
+        return !callBackFunctions_.empty();
     }
 
 private:
@@ -155,6 +170,12 @@ struct BuildMDModulesNotifier<>
         void notify() {}
         //! Do nothing but provide MDModulesNotifier::subscribe to derived class
         void subscribe() {}
+        //! Do nothing but provide MDModulesNotifier::haveSubscribers to derived class
+        template<class T>
+        bool haveSubscribers() const
+        {
+            return false;
+        }
     };
     /*! \brief Defines a type if no notifications are managed.
      *

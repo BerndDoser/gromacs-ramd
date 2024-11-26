@@ -34,24 +34,36 @@
 #include "gmxpre.h"
 
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
+#include <filesystem>
+#include <string>
+
+#include "gromacs/commandline/filenm.h"
 #include "gromacs/commandline/pargs.h"
 #include "gromacs/fileio/confio.h"
+#include "gromacs/fileio/filetypes.h"
 #include "gromacs/fileio/trxio.h"
 #include "gromacs/fileio/xvgr.h"
 #include "gromacs/gmxana/gmx_ana.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/pbcutil/rmpbc.h"
 #include "gromacs/topology/index.h"
 #include "gromacs/topology/topology.h"
 #include "gromacs/trajectory/trajectoryframe.h"
 #include "gromacs/utility/arraysize.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/futil.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
+
+enum class PbcType : int;
+struct gmx_output_env_t;
 
 typedef struct
 {
@@ -113,16 +125,16 @@ int gmx_trjorder(int argc, char* argv[])
         { "-na", FALSE, etINT, { &na }, "Number of atoms in a molecule" },
         { "-da", FALSE, etINT, { &ref_a }, "Atom used for the distance calculation, 0 is COM" },
         { "-com",
-          FALSE,
-          etBOOL,
-          { &bCOM },
-          "Use the distance to the center of mass of the reference group" },
+                  FALSE,
+                  etBOOL,
+                  { &bCOM },
+                  "Use the distance to the center of mass of the reference group" },
         { "-r",
-          FALSE,
-          etREAL,
-          { &rcut },
-          "Cutoff used for the distance calculation when computing the number of molecules in a "
-          "shell around e.g. a protein" },
+                  FALSE,
+                  etREAL,
+                  { &rcut },
+                  "Cutoff used for the distance calculation when computing the number of molecules in a "
+                          "shell around e.g. a protein" },
         { "-z", FALSE, etBOOL, { &bZ }, "Order molecules on z-coordinate" }
     };
     FILE*             fp;
@@ -142,10 +154,10 @@ int gmx_trjorder(int argc, char* argv[])
     int               sa, sr, *swi, **index, *ind_ref = nullptr, *ind_sol;
     gmx_output_env_t* oenv;
     t_filenm          fnm[] = { { efTRX, "-f", nullptr, ffREAD },
-                       { efTPS, nullptr, nullptr, ffREAD },
-                       { efNDX, nullptr, nullptr, ffOPTRD },
-                       { efTRO, "-o", "ordered", ffOPTWR },
-                       { efXVG, "-nshell", "nshell", ffOPTWR } };
+                                { efTPS, nullptr, nullptr, ffREAD },
+                                { efNDX, nullptr, nullptr, ffOPTRD },
+                                { efTRO, "-o", "ordered", ffOPTWR },
+                                { efXVG, "-nshell", "nshell", ffOPTWR } };
 #define NFILE asize(fnm)
 
     if (!parse_common_args(

@@ -43,9 +43,14 @@
 
 #include "mrcdensitymapheader.h"
 
-#include <algorithm>
+#include <cstdint>
 
+#include <algorithm>
+#include <iterator>
+
+#include "gromacs/mdspan/extents.h"
 #include "gromacs/utility/exceptions.h"
+#include "gromacs/utility/real.h"
 
 namespace gmx
 {
@@ -64,9 +69,9 @@ bool anySmallerZero(const Container& values)
 template<typename Container>
 bool anyLargerThanValue(const Container& values, typename Container::value_type boundaryValue)
 {
-    return std::any_of(std::begin(values), std::end(values), [boundaryValue](auto v) {
-        return v > boundaryValue;
-    });
+    return std::any_of(std::begin(values),
+                       std::end(values),
+                       [boundaryValue](auto v) { return v > boundaryValue; });
 }
 
 } // namespace
@@ -90,8 +95,8 @@ TranslateAndScale getCoordinateTransformationToLattice(const MrcDensityMapHeader
     constexpr real c_AAtoNmConversion = 0.1;
 
     RVec       scale = { header.extent_[XX] / (header.cellLength_[XX] * c_AAtoNmConversion),
-                   header.extent_[YY] / (header.cellLength_[YY] * c_AAtoNmConversion),
-                   header.extent_[ZZ] / (header.cellLength_[ZZ] * c_AAtoNmConversion) };
+                         header.extent_[YY] / (header.cellLength_[YY] * c_AAtoNmConversion),
+                         header.extent_[ZZ] / (header.cellLength_[ZZ] * c_AAtoNmConversion) };
     const RVec emdbOrigin{ header.userDefinedFloat_[12],
                            header.userDefinedFloat_[13],
                            header.userDefinedFloat_[14] };

@@ -42,34 +42,45 @@
 
 #include "gmxpre.h"
 
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
 #include <algorithm>
 #include <array>
+#include <filesystem>
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "gromacs/applied_forces/awh/read_params.h"
+#include "gromacs/commandline/filenm.h"
 #include "gromacs/commandline/pargs.h"
 #include "gromacs/fileio/enxio.h"
+#include "gromacs/fileio/filetypes.h"
 #include "gromacs/fileio/oenv.h"
 #include "gromacs/fileio/tpxio.h"
 #include "gromacs/fileio/trxio.h"
 #include "gromacs/fileio/xvgr.h"
 #include "gromacs/gmxana/gmx_ana.h"
 #include "gromacs/math/units.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/mdtypes/awh_params.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/topology/topology.h"
 #include "gromacs/trajectory/energyframe.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/arraysize.h"
 #include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/futil.h"
 #include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/stringutil.h"
+
+struct gmx_output_env_t;
 
 using gmx::AwhBiasParams;
 using gmx::AwhParams;
@@ -514,16 +525,16 @@ void AwhReader::processAwhFrame(const t_enxblock& block, double time, const gmx_
 int gmx_awh(int argc, char* argv[])
 {
     const char*     desc[]     = { "[THISMODULE] extracts AWH data from an energy file.",
-                           "One or two files are written per AWH bias per time frame.",
-                           "The bias index, if more than one, is appended to the file, as well as",
-                           "the time of the frame. By default only the PMF is printed.",
-                           "With [TT]-more[tt] the bias, target and coordinate distributions",
-                           "are also printed.",
-                           "With [TT]-more[tt] the bias, target and coordinate distributions",
-                           "are also printed, as well as the metric sqrt(det(friction_tensor))",
-                           "normalized such that the average is 1.",
-                           "Option [TT]-fric[tt] prints all components of the friction tensor",
-                           "to an additional set of files." };
+                                   "One or two files are written per AWH bias per time frame.",
+                                   "The bias index, if more than one, is appended to the file, as well as",
+                                   "the time of the frame. By default only the PMF is printed.",
+                                   "With [TT]-more[tt] the bias, target and coordinate distributions",
+                                   "are also printed.",
+                                   "With [TT]-more[tt] the bias, target and coordinate distributions",
+                                   "are also printed, as well as the metric sqrt(det(friction_tensor))",
+                                   "normalized such that the average is 1.",
+                                   "Option [TT]-fric[tt] prints all components of the friction tensor",
+                                   "to an additional set of files." };
     static gmx_bool moreGraphs = FALSE;
     static int      skip       = 0;
     static gmx_bool kTUnit     = FALSE;
@@ -531,10 +542,10 @@ int gmx_awh(int argc, char* argv[])
         { "-skip", FALSE, etINT, { &skip }, "Skip number of frames between data points" },
         { "-more", FALSE, etBOOL, { &moreGraphs }, "Print more output" },
         { "-kt",
-          FALSE,
-          etBOOL,
-          { &kTUnit },
-          "Print free energy output in units of kT instead of kJ/mol" }
+                        FALSE,
+                        etBOOL,
+                        { &kTUnit },
+                        "Print free energy output in units of kT instead of kJ/mol" }
     };
 
     ener_file_t       fp;
@@ -545,9 +556,9 @@ int gmx_awh(int argc, char* argv[])
     gmx_output_env_t* oenv;
 
     t_filenm  fnm[] = { { efEDR, "-f", nullptr, ffREAD },
-                       { efTPR, "-s", nullptr, ffREAD },
-                       { efXVG, "-o", "awh", ffWRITE },
-                       { efXVG, "-fric", "friction", ffOPTWR } };
+                        { efTPR, "-s", nullptr, ffREAD },
+                        { efXVG, "-o", "awh", ffWRITE },
+                        { efXVG, "-fric", "friction", ffOPTWR } };
     const int nfile = asize(fnm);
     if (!parse_common_args(&argc,
                            argv,

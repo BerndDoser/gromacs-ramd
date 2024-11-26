@@ -36,9 +36,12 @@
 
 #include "wholemoleculetransform.h"
 
+#include <algorithm>
+
 #include "gromacs/domdec/ga2la.h"
 #include "gromacs/topology/mtop_util.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/utility/gmxassert.h"
 
 namespace gmx
 {
@@ -89,9 +92,10 @@ void WholeMoleculeTransform::updateAtomOrder(ArrayRef<const int> globalAtomIndic
                     graphGlobalAtomOrderEdges_[globalAtomIndex - globalEdgeAtomBegin_];
             graph_.edges.pushBackListOfSize(globalList.size());
             ArrayRef<int> lastList = graph_.edges.back();
-            std::transform(globalList.begin(), globalList.end(), lastList.begin(), [&ga2la](int i) -> int {
-                return ga2la.find(i)->la;
-            });
+            std::transform(globalList.begin(),
+                           globalList.end(),
+                           lastList.begin(),
+                           [&ga2la](int i) -> int { return ga2la.find(i)->la; });
         }
         else
         {

@@ -53,6 +53,7 @@
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/gmxmpi.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
 
 #ifdef NOGMX
@@ -134,6 +135,8 @@ static int vmax(const int* a, int s)
     }
     return max;
 }
+
+static constexpr bool allocatePmeGpuMixedMode = (GMX_GPU && !GMX_GPU_OPENCL);
 
 
 /* NxMxK the size of the data
@@ -424,8 +427,7 @@ fft5d_plan fft5d_plan_3d(int                NG,
     if (!(flags & FFT5D_NOMALLOC))
     {
         // only needed for PME GPU mixed mode
-        if ((GMX_GPU_CUDA || GMX_GPU_SYCL)
-            && realGridAllocationPinningPolicy == gmx::PinningPolicy::PinnedIfSupported)
+        if (allocatePmeGpuMixedMode && realGridAllocationPinningPolicy == gmx::PinningPolicy::PinnedIfSupported)
         {
             gmx::HostAllocationPolicy policy(realGridAllocationPinningPolicy);
             const std::size_t         numBytes = lsize * sizeof(t_complex);
@@ -942,8 +944,8 @@ static void compute_offsets(fft5d_plan plan, int xs[], int xl[], int xc[], int N
     /*    int direction = plan->direction;
         int fftorder = plan->fftorder;*/
 
-    int  o = 0;
-    int  pos[3], i;
+    int o = 0;
+    int pos[3], i;
     int *pM = plan->pM, *pK = plan->pK, *oM = plan->oM, *oK = plan->oK, *C = plan->C, *rC = plan->rC;
 
     NG[0] = plan->NG;
@@ -1286,8 +1288,8 @@ void fft5d_execute(fft5d_plan plan, int thread, fft5d_time times)
 #else
                 wallcycle_stop(times, WallCycleCounter::PmeFftComm);
 #endif
-            }       /*main*/
-        }           /* bPrallelDim */
+            } /*main*/
+        } /* bPrallelDim */
 #pragma omp barrier /*both needed for parallel and non-parallel dimension (either have to wait on data from AlltoAll or from last FFT*/
 
         /* ---------- END SPLIT + TRANSPOSE------------ */
@@ -1465,7 +1467,7 @@ void fft5d_destroy(fft5d_plan plan)
     if (!(plan->flags & FFT5D_NOMALLOC))
     {
         // only needed for PME GPU mixed mode
-        if ((GMX_GPU_CUDA || GMX_GPU_SYCL) && plan->pinningPolicy == gmx::PinningPolicy::PinnedIfSupported)
+        if (allocatePmeGpuMixedMode && plan->pinningPolicy == gmx::PinningPolicy::PinnedIfSupported)
         {
             /* We need DeviceContext to properly check pinning with SYCL. We can work around that,
              * but for an assert it's not overly important.

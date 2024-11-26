@@ -44,13 +44,19 @@
 #include "testutils/refdata.h"
 
 #include <cctype>
+#include <cinttypes>
 #include <cstdlib>
 
 #include <algorithm>
 #include <filesystem>
 #include <limits>
+#include <list>
+#include <memory>
 #include <optional>
+#include <ostream>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -58,6 +64,7 @@
 #include "gromacs/options/basicoptions.h"
 #include "gromacs/options/ioptionscontainer.h"
 #include "gromacs/utility/any.h"
+#include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/keyvaluetree.h"
@@ -175,8 +182,8 @@ namespace
 TestReferenceDataImplPointer initReferenceDataInstance(std::optional<std::filesystem::path> testNameOverride)
 {
     GMX_RELEASE_ASSERT(!g_referenceData, "Test cannot create multiple TestReferenceData instances");
-    g_referenceData.reset(new internal::TestReferenceDataImpl(
-            referenceDataMode(), false, std::move(testNameOverride)));
+    g_referenceData = std::make_shared<internal::TestReferenceDataImpl>(
+            referenceDataMode(), false, std::move(testNameOverride));
     return g_referenceData;
 }
 
@@ -190,7 +197,7 @@ TestReferenceDataImplPointer initReferenceDataInstanceForSelfTest(ReferenceDataM
         g_referenceData->onTestEnd(true);
         g_referenceData.reset();
     }
-    g_referenceData.reset(new internal::TestReferenceDataImpl(mode, true, std::nullopt));
+    g_referenceData = std::make_shared<internal::TestReferenceDataImpl>(mode, true, std::nullopt);
     return g_referenceData;
 }
 
@@ -296,8 +303,8 @@ void initReferenceData(IOptionsContainer* options)
 namespace internal
 {
 
-TestReferenceDataImpl::TestReferenceDataImpl(ReferenceDataMode                    mode,
-                                             bool                                 bSelfTestMode,
+TestReferenceDataImpl::TestReferenceDataImpl(ReferenceDataMode mode,
+                                             bool              bSelfTestMode,
                                              std::optional<std::filesystem::path> testNameOverride) :
     updateMismatchingEntries_(false), bSelfTestMode_(bSelfTestMode), bInUse_(false)
 {
@@ -704,6 +711,11 @@ TestReferenceData::TestReferenceData(std::string testNameOverride) :
 {
 }
 
+TestReferenceData::TestReferenceData(std::filesystem::path testNameOverride) :
+    impl_(initReferenceDataInstance(std::move(testNameOverride)))
+{
+}
+
 TestReferenceData::TestReferenceData(ReferenceDataMode mode) :
     impl_(initReferenceDataInstanceForSelfTest(mode))
 {
@@ -875,9 +887,9 @@ static void throwIfNonEmptyAndOnlyWhitespace(const std::string& s, const char* i
     if (!s.empty() && std::all_of(s.cbegin(), s.cend(), [](const char& c) { return std::isspace(c); }))
     {
         std::string message("String '" + s + "' with ");
-        message += (id != nullptr) ? "null " : "";
+        message += (id == nullptr) ? "null " : "";
         message += "ID ";
-        message += (id != nullptr) ? "" : id;
+        message += (id == nullptr) ? "" : id;
         message +=
                 " cannot be handled. We must refuse to write a refdata String"
                 "field for a non-empty string that contains only whitespace, "

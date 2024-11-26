@@ -44,7 +44,13 @@
 
 #include "gromacs/utility/strconvert.h"
 
+#include <array>
+#include <optional>
+#include <string>
+
 #include <gtest/gtest.h>
+
+#include "gromacs/utility/exceptions.h"
 
 namespace gmx
 {
@@ -89,7 +95,8 @@ TEST(StringConvert, ThrowsWhenWrongSize)
 TEST(StringConvert, StringIdentityTransformWithArrayThrows)
 {
     // use the lambda due to aviod Macro substitution error with template function
-    const auto& toTest = []() {
+    const auto& toTest = []()
+    {
         return stringIdentityTransformWithArrayCheck<float, 3>(
                 "-10 5 4 1", "Here, I explain where the error occurred: ");
     };

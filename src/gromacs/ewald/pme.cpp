@@ -77,16 +77,24 @@
 #include <cstring>
 
 #include <algorithm>
+#include <array>
+#include <filesystem>
 #include <list>
+#include <tuple>
+#include <utility>
 
 #include "gromacs/domdec/domdec.h"
 #include "gromacs/ewald/ewald_utils.h"
+#include "gromacs/ewald/pme_output.h"
+#include "gromacs/fft/fft.h"
 #include "gromacs/fft/parallel_3dfft.h"
 #include "gromacs/fileio/pdbio.h"
 #include "gromacs/gmxlib/network.h"
 #include "gromacs/gmxlib/nrnb.h"
+#include "gromacs/gpu_utils/hostallocator.h"
 #include "gromacs/hardware/hw_info.h"
 #include "gromacs/math/boxmatrix.h"
+#include "gromacs/math/functions.h"
 #include "gromacs/math/gmxcomplex.h"
 #include "gromacs/math/units.h"
 #include "gromacs/math/vec.h"
@@ -101,15 +109,20 @@
 #include "gromacs/timing/wallcycle.h"
 #include "gromacs/timing/walltime_accounting.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/utility/alignedallocator.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/fatalerror.h"
+#include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/gmxmpi.h"
 #include "gromacs/utility/gmxomp.h"
+#include "gromacs/utility/iserializer.h"
 #include "gromacs/utility/logger.h"
 #include "gromacs/utility/message_string_collector.h"
 #include "gromacs/utility/real.h"
+#include "gromacs/utility/stringutil.h"
 #include "gromacs/utility/unique_cptr.h"
 
 #include "calculate_spline_moduli.h"
@@ -121,6 +134,8 @@
 #include "pme_solve.h"
 #include "pme_spline_work.h"
 #include "pme_spread.h"
+
+struct gmx_parallel_3dfft;
 
 bool pme_gpu_supports_build(std::string* error)
 {
@@ -1644,7 +1659,7 @@ int gmx_pme_do(struct gmx_pme_t*              pme,
 
                             if (pme->nodeid == 0)
                             {
-                                real      ntot = pme->nkx * pme->nky * pme->nkz;
+                                real ntot = pme->nkx * pme->nky * pme->nkz;
                                 const int npme = static_cast<int>(ntot * std::log(ntot) / std::log(2.0));
                                 inc_nrnb(nrnb, eNR_FFT, 2 * npme);
                             }
@@ -1695,8 +1710,8 @@ int gmx_pme_do(struct gmx_pme_t*              pme,
 
                 bFirst = false;
             } /* for (grid_index = 8; grid_index >= 2; --grid_index) */
-        }     /* for (fep_state = 0; fep_state < fep_states_lj; ++fep_state) */
-    }         /* if (pme->doLJ && pme->ljpme_combination_rule == LongRangeVdW::LB) */
+        } /* for (fep_state = 0; fep_state < fep_states_lj; ++fep_state) */
+    } /* if (pme->doLJ && pme->ljpme_combination_rule == LongRangeVdW::LB) */
 
     if (stepWork.computeForces && pme->nnodes > 1)
     {

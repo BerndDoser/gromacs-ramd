@@ -86,9 +86,18 @@
 
 #include "gromacs/mdspan/extents.h"
 
+#include <cstddef>
+
+#include <array>
+#include <string>
+
 #include <gtest/gtest.h>
 
 namespace gmx
+{
+namespace test
+{
+namespace
 {
 
 template<ptrdiff_t... E_STATIC>
@@ -202,4 +211,7 @@ TEST(ExtentsTest, Assignment)
         EXPECT_EQ(e3.extent(r), e1.extent(r));
     }
 }
+
+} // namespace
+} // namespace test
 } // namespace gmx

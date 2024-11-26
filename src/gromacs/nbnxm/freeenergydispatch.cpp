@@ -36,9 +36,15 @@
 
 #include "freeenergydispatch.h"
 
+#include <algorithm>
+#include <array>
+#include <iterator>
+#include <vector>
+
 #include "gromacs/gmxlib/nonbonded/nb_free_energy.h"
 #include "gromacs/gmxlib/nonbonded/nonbonded.h"
 #include "gromacs/gmxlib/nrnb.h"
+#include "gromacs/math/arrayrefwithpadding.h"
 #include "gromacs/math/vectypes.h"
 #include "gromacs/mdlib/enerdata_utils.h"
 #include "gromacs/mdlib/force.h"
@@ -46,18 +52,26 @@
 #include "gromacs/mdtypes/enerdata.h"
 #include "gromacs/mdtypes/forceoutput.h"
 #include "gromacs/mdtypes/interaction_const.h"
+#include "gromacs/mdtypes/locality.h"
 #include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/mdtypes/nblist.h"
 #include "gromacs/mdtypes/simulation_workload.h"
 #include "gromacs/mdtypes/threaded_force_buffer.h"
 #include "gromacs/nbnxm/nbnxm.h"
+#include "gromacs/nbnxm/pairlistparams.h"
 #include "gromacs/timing/wallcycle.h"
+#include "gromacs/topology/ifunc.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/enumerationhelpers.h"
+#include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/real.h"
 
 #include "pairlistset.h"
 #include "pairlistsets.h"
+
+namespace gmx
+{
 
 FreeEnergyDispatch::FreeEnergyDispatch(const int numEnergyGroups) :
     foreignGroupPairEnergies_(numEnergyGroups),
@@ -74,16 +88,16 @@ void setReductionMaskFromFepPairlist(const t_nblist& gmx_restrict       nlist,
                                      gmx::ThreadForceBuffer<gmx::RVec>* threadForceBuffer)
 {
     // Extract pair list data
-    gmx::ArrayRef<const int> iinr = nlist.iinr;
-    gmx::ArrayRef<const int> jjnr = nlist.jjnr;
+    gmx::ArrayRef<const t_nblist::IEntry> iList = nlist.iList();
+    gmx::ArrayRef<const t_nblist::JEntry> jList = nlist.flatJList();
 
-    for (int i : iinr)
+    for (const t_nblist::IEntry& i : iList)
     {
-        threadForceBuffer->addAtomToMask(i);
+        threadForceBuffer->addAtomToMask(i.atom);
     }
-    for (int j : jjnr)
+    for (const t_nblist::JEntry& j : jList)
     {
-        threadForceBuffer->addAtomToMask(j);
+        threadForceBuffer->addAtomToMask(j.atom);
     }
 }
 
@@ -297,8 +311,8 @@ void dispatchFreeEnergyKernel(gmx::ArrayRef<const std::unique_ptr<t_nblist>>   n
             }
 
             foreignGroupPairEnergies->clear();
-            threadedForeignEnergyBuffer->reduce(
-                    nullptr, nullptr, foreignGroupPairEnergies, dvdl_nb, stepWorkForeignEnergies, 0);
+            threadedForeignEnergyBuffer->reduceEnergiesAndDvdl(
+                    nullptr, foreignGroupPairEnergies, dvdl_nb, stepWorkForeignEnergies, 0);
 
             std::array<real, F_NRE> foreign_term = { 0 };
             sum_epot(*foreignGroupPairEnergies, foreign_term.data());
@@ -345,7 +359,7 @@ void FreeEnergyDispatch::dispatchFreeEnergyKernels(const PairlistSets& pairlistS
         const gmx::InteractionLocality iLocality = static_cast<gmx::InteractionLocality>(i);
         const auto fepPairlists                  = pairlistSets.pairlistSet(iLocality).fepLists();
         /* When the first list is empty, all are empty and there is nothing to do */
-        if (fepPairlists[0]->nrj > 0)
+        if (!fepPairlists[0]->flatJList().empty())
         {
             dispatchFreeEnergyKernel(fepPairlists,
                                      coords,
@@ -454,3 +468,5 @@ void nonbonded_verlet_t::dispatchFreeEnergyKernels(const gmx::ArrayRefWithPaddin
                                                    nrnb,
                                                    wcycle_);
 }
+
+} // namespace gmx

@@ -37,28 +37,41 @@
 
 #include <cctype>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
 #include <algorithm>
+#include <filesystem>
+#include <optional>
 #include <string>
 
 #include "gromacs/fileio/gmxfio.h"
+#include "gromacs/math/functions.h"
 #include "gromacs/math/units.h"
 #include "gromacs/math/utilities.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
+#include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/topology/atomprop.h"
+#include "gromacs/topology/atoms.h"
+#include "gromacs/topology/idef.h"
 #include "gromacs/topology/ifunc.h"
 #include "gromacs/topology/symtab.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/topology/topology_enums.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/coolstuff.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/futil.h"
+#include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/snprintf.h"
+#include "gromacs/utility/stringcompare.h"
 #include "gromacs/utility/stringtoenumvalueconverter.h"
 
 typedef struct
@@ -573,6 +586,9 @@ void get_pdb_atomnumber(const t_atoms* atoms, AtomProperties* aps)
         if ((anm[0] != ' ') && ((len <= 2) || !std::isdigit(anm[2])))
         {
             anm_copy[2] = nc;
+            // if anm[0] is not a space character, by PDB convention assume two-letter atom name as they
+            // start in column 13. convert to lower case to ensure correct matching in the database
+            anm_copy[1] = std::tolower(anm_copy[1]);
             if (aps->setAtomProperty(epropElement, "???", anm_copy, &eval))
             {
                 atomnumber    = gmx::roundToInt(eval);

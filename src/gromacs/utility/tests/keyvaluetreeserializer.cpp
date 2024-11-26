@@ -36,15 +36,27 @@
 #include "gromacs/utility/keyvaluetreeserializer.h"
 
 #include <cstddef>
+#include <cstdint>
+
+#include <string>
+#include <vector>
 
 #include <gtest/gtest.h>
 
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/inmemoryserializer.h"
 #include "gromacs/utility/iserializer.h"
+#include "gromacs/utility/keyvaluetree.h"
 #include "gromacs/utility/keyvaluetreebuilder.h"
+#include "gromacs/utility/real.h"
 
 #include "testutils/refdata.h"
 
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
@@ -157,3 +169,5 @@ TEST_F(KeyValueTreeSerializerTest, ObjectWithObjects)
 }
 
 } // namespace
+} // namespace test
+} // namespace gmx

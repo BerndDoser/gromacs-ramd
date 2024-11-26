@@ -67,6 +67,8 @@
 #ifndef GMX_LISTED_FORCES_LISTED_FORCES_H
 #define GMX_LISTED_FORCES_LISTED_FORCES_H
 
+#include <cstdio>
+
 #include <bitset>
 #include <memory>
 #include <vector>
@@ -74,7 +76,9 @@
 #include "gromacs/math/vectypes.h"
 #include "gromacs/topology/idef.h"
 #include "gromacs/topology/ifunc.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/classhelpers.h"
+#include "gromacs/utility/real.h"
 
 struct bonded_threading_t;
 struct gmx_enerdata_t;
@@ -151,8 +155,14 @@ public:
      * \param[in] domainIdef     Interaction definitions for all listed interactions to be computed on this domain/rank
      * \param[in] numAtomsForce  Force are, potentially, computed for atoms 0 to \p numAtomsForce
      * \param[in] useGpu         Whether a GPU is used to compute (part of) the listed interactions
+     * \param[in] restraintComIndices     Reference to COM groups indices (needed for posres calculation)
+     * \param[in] numComGroups   The number of groups for center of mass motion removal, used for position restraints
      */
-    void setup(const InteractionDefinitions& domainIdef, int numAtomsForce, bool useGpu);
+    void setup(const InteractionDefinitions&       domainIdef,
+               int                                 numAtomsForce,
+               bool                                useGpu,
+               gmx::ArrayRef<const unsigned short> restraintComIndices,
+               int                                 numComGroups);
 
     /*! \brief Do all aspects of energy and force calculations for mdrun
      * on the set of listed interactions
@@ -212,6 +222,12 @@ private:
     std::vector<gmx::RVec> shiftForceBufferLambda_;
     //! Temporary array for storing foreign lambda group pair energies
     std::unique_ptr<gmx_grppairener_t> foreignEnergyGroups_;
+    //! Vector of indices needed in order to loop over the atoms in each COM group (currently just a reference to t_mdatoms.cVCM)
+    gmx::ArrayRef<const unsigned short> restraintComIndices_;
+    //! Buffer for computing scaled centers of mass for position restraints
+    std::vector<gmx::RVec> centersOfMassScaledBuffer_;
+    //! Buffer for computing scaled centers of mass for topology B for position restraints
+    std::vector<gmx::RVec> centersOfMassBScaledBuffer_;
 
     GMX_DISALLOW_COPY_AND_ASSIGN(ListedForces);
 };

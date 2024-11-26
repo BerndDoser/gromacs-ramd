@@ -42,6 +42,9 @@
 
 #include "gromacs/selection/selectionoption.h"
 
+#include <filesystem>
+#include <string>
+
 #include <gtest/gtest.h>
 
 #include "gromacs/options/options.h"
@@ -57,8 +60,10 @@
 
 #include "toputils.h"
 
-using gmx::test::TestFileManager;
-
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
@@ -646,3 +651,5 @@ TEST_F(SelectionFileOptionTest, GivesErrorWithMultipleFiles)
 }
 
 } // namespace
+} // namespace test
+} // namespace gmx

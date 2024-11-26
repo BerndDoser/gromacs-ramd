@@ -51,6 +51,8 @@
 #ifndef GMX_AWH_COORDSTATE_H
 #define GMX_AWH_COORDSTATE_H
 
+#include <cstdint>
+
 #include <vector>
 
 #include "dimparams.h"
@@ -128,9 +130,9 @@ public:
     void setUmbrellaGridpointToGridpoint();
 
 private:
-    awh_dvec coordValue_;        /**< Current coordinate value in (nm or rad) */
-    int      gridpointIndex_;    /**< The grid point index for the current coordinate value */
-    int      umbrellaGridpoint_; /**< Index for the current reference grid point for the umbrella, only used with umbrella potential type */
+    awh_dvec coordValue_;     /**< Current coordinate value in (nm or rad) */
+    int      gridpointIndex_; /**< The grid point index for the current coordinate value */
+    int umbrellaGridpoint_; /**< Index for the current reference grid point for the umbrella, only used with umbrella potential type */
 };
 
 } // namespace gmx

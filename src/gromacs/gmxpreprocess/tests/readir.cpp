@@ -46,14 +46,19 @@
 
 #include "gromacs/gmxpreprocess/readir.h"
 
+#include "config.h"
+
+#include <filesystem>
 #include <string>
 
 #include <gtest/gtest.h>
 
+#include "gromacs/fileio/readinp.h"
 #include "gromacs/fileio/warninp.h"
 #include "gromacs/mdrun/mdmodules.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/utility/cstringutil.h"
+#include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/stringutil.h"
 #include "gromacs/utility/textreader.h"
 #include "gromacs/utility/textwriter.h"
@@ -155,18 +160,18 @@ public:
 TEST_F(GetIrTest, HandlesDifferentKindsOfMdpLines)
 {
     const char*    inputMdpFile[] = { "; File to run my simulation",
-                                   "title = simulation",
-                                   "define = -DBOOLVAR -DVAR=VALUE",
-                                   ";",
-                                   "xtc_grps = System ; was Protein",
-                                   "include = -I/home/me/stuff",
-                                   "",
-                                   "tau-t = 0.1 0.3",
-                                   "ref-t = ;290 290",
-                                   "tinit = 0.3",
-                                   "init_step = 0",
-                                   "nstcomm = 100",
-                                   "integrator = steep" };
+                                      "title = simulation",
+                                      "define = -DBOOLVAR -DVAR=VALUE",
+                                      ";",
+                                      "xtc_grps = System ; was Protein",
+                                      "include = -I/home/me/stuff",
+                                      "",
+                                      "tau-t = 0.1 0.3",
+                                      "ref-t = ;290 290",
+                                      "tinit = 0.3",
+                                      "init_step = 0",
+                                      "nstcomm = 100",
+                                      "integrator = steep" };
     WarningHandler wi{ false, 0 };
     runTest(joinStrings(inputMdpFile, "\n"));
 }

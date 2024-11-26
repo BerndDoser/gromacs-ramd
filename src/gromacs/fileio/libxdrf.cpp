@@ -35,6 +35,7 @@
 
 #include <climits>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -43,8 +44,10 @@
 
 #include "gromacs/fileio/xdr_datatype.h"
 #include "gromacs/fileio/xdrf.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/futil.h"
+#include "gromacs/utility/real.h"
 
 /* This is just for clarity - it can never be anything but 4! */
 #define XDR_INT_SIZE 4
@@ -270,6 +273,8 @@ static void sendints(struct DataBuffer* buffer,
         }
         num_of_bytes = bytecnt;
     }
+    // If the caller specified a sufficiently large bit count,
+    // do what they say.
     if (num_of_bits >= num_of_bytes * CHAR_BIT)
     {
         for (i = 0; i < num_of_bytes; i++)
@@ -280,11 +285,15 @@ static void sendints(struct DataBuffer* buffer,
     }
     else
     {
+        // Otherwise send each byte we found
         for (i = 0; i < num_of_bytes - 1; i++)
         {
             sendbits(buffer, CHAR_BIT, bytes[i]);
         }
-        sendbits(buffer, num_of_bits - (num_of_bytes - 1) * CHAR_BIT, bytes[i]);
+        // Then the remaining bits
+        const int numBitsRemaining = num_of_bits - (num_of_bytes - 1) * CHAR_BIT;
+        GMX_ASSERT(numBitsRemaining < CHAR_BIT, "Help clang analyzer understand");
+        sendbits(buffer, numBitsRemaining, bytes[i]);
     }
 }
 

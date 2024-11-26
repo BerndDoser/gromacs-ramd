@@ -45,6 +45,7 @@
 
 #include <array>
 #include <memory>
+#include <string>
 
 #include "gromacs/commandline/filenm.h"
 #include "gromacs/compat/pointers.h"
@@ -54,11 +55,13 @@
 #include "gromacs/mdrun/mdmodules.h"
 #include "gromacs/mdrun/simulationinputhandle.h"
 #include "gromacs/mdrunutility/handlerestart.h"
+#include "gromacs/mdrunutility/logging.h"
 #include "gromacs/mdtypes/mdrunoptions.h"
 #include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/gmxmpi.h"
 #include "gromacs/utility/real.h"
+#include "gromacs/utility/unique_cptr.h"
 
 #include "replicaexchange.h"
 
@@ -131,7 +134,7 @@ public:
      *
      * \{
      */
-    Mdrunner(const Mdrunner&) = delete;
+    Mdrunner(const Mdrunner&)            = delete;
     Mdrunner& operator=(const Mdrunner&) = delete;
     /* \} */
 
@@ -376,8 +379,8 @@ public:
                              compat::not_null<SimulationContext*> context);
 
     //! \cond
-    MdrunnerBuilder()                       = delete;
-    MdrunnerBuilder(const MdrunnerBuilder&) = delete;
+    MdrunnerBuilder()                                  = delete;
+    MdrunnerBuilder(const MdrunnerBuilder&)            = delete;
     MdrunnerBuilder& operator=(const MdrunnerBuilder&) = delete;
     //! \endcond
 

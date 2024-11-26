@@ -55,9 +55,23 @@
 #include <fcntl.h>
 
 #include <cerrno>
+#include <cstdio>
 #include <cstring>
 
+#include <array>
 #include <filesystem>
+#include <iterator>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+#include "gromacs/fileio/filetypes.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/futil.h"
+#include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/stringutil.h"
+#include "gromacs/utility/unique_cptr.h"
 #if GMX_NATIVE_WINDOWS
 #    include <io.h>
 
@@ -306,10 +320,11 @@ StartingBehaviorHandler chooseStartingBehavior(const AppendingBehavior appending
     {
         // See whether appending can be done.
 
-        size_t numFilesMissing = std::count_if(
-                std::begin(outputFiles), std::end(outputFiles), [nfile, fnm](const auto& outputFile) {
-                    return !exist_output_file(outputFile.filename, nfile, fnm);
-                });
+        size_t numFilesMissing =
+                std::count_if(std::begin(outputFiles),
+                              std::end(outputFiles),
+                              [nfile, fnm](const auto& outputFile)
+                              { return !exist_output_file(outputFile.filename, nfile, fnm); });
         if (numFilesMissing != 0)
         {
             // Appending is not possible, because not all previous

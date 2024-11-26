@@ -57,17 +57,23 @@
 #ifndef GMX_NBNXM_ENERGY_ACCUMULATOR_H
 #define GMX_NBNXM_ENERGY_ACCUMULATOR_H
 
+#include <cstddef>
+#include <cstdint>
+
+#include <array>
+#include <vector>
+
 #include "gromacs/simd/simd.h"
 #include "gromacs/utility/alignedallocator.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/basedefinitions.h"
+#include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/real.h"
 
 #include "nbnxm_simd.h"
 
 namespace gmx
 {
-
-//! Convenience type for vector with aligned memory
-template<typename T>
-using AlignedVector = std::vector<T, gmx::AlignedAllocator<T>>;
 
 class EnergyGroupsPerCluster;
 
@@ -132,8 +138,8 @@ public:
 #if GMX_SIMD
     //! Does nothing
     template<int nRCoulomb, int nRVdw, KernelLayout kernelLayout, int iClusterSize, std::size_t cSize, std::size_t vdwSize>
-    inline void addEnergies(const int gmx_unused              jCluster,
-                            const std::array<SimdReal, cSize> gmx_unused& coulombEnergy,
+    inline void addEnergies(const int gmx_unused                            jCluster,
+                            const std::array<SimdReal, cSize> gmx_unused&   coulombEnergy,
                             const std::array<SimdReal, vdwSize> gmx_unused& vdwEnergy)
     {
     }
@@ -279,9 +285,9 @@ public:
         energyGroupsICluster_ = energyGroups_[iCluster];
         for (int iAtom = 0; iAtom < iClusterSize; iAtom++)
         {
-            const int iAtomIndex        = (energyGroupsICluster_ >> (iAtom * iShift_)) & iMask_;
+            const int iAtomIndex = (energyGroupsICluster_ >> (iAtom * iShift_)) & iMask_;
             coulombBinIAtomPtrs_[iAtom] = coulombEnergyGroupPairBins_.data() + iAtomIndex * iStride_;
-            vdwBinIAtomPtrs_[iAtom]     = vdwEnergyGroupPairBins_.data() + iAtomIndex * iStride_;
+            vdwBinIAtomPtrs_[iAtom] = vdwEnergyGroupPairBins_.data() + iAtomIndex * iStride_;
         }
     }
 
@@ -474,11 +480,6 @@ public:
                    "The number of indices should be a multiple of the i-cluster size");
         const int numIClusters = indices.ssize() / iClusterSize_;
 
-        if (clusterOffset + numIClusters > gmx::ssize(energyGroups_))
-        {
-            energyGroups_.resize(clusterOffset + numIClusters);
-        }
-
         for (int iCluster = 0; iCluster < numIClusters; iCluster++)
         {
             // Store all energy group indices for an i-cluster in one int
@@ -494,6 +495,9 @@ public:
             energyGroups_[clusterOffset + iCluster] = comb;
         }
     }
+
+    //! Reallocate the buffer.
+    void resizeEnergyGroups(int numAtoms) { energyGroups_.resize(numAtoms / iClusterSize_); }
 
     //! Returns the energy group for atom \p atomIndexInCluster in i-cluster \p iCLuster
     int getEnergyGroup(int iCluster, int atomIndexInCluster)

@@ -39,12 +39,25 @@
  */
 #include "gmxpre.h"
 
+#include <cstddef>
+
+#include <algorithm>
+#include <filesystem>
 #include <numeric>
 #include <optional>
+#include <string>
+#include <tuple>
+#include <type_traits>
+#include <vector>
 
 #include <gtest/gtest.h>
 
 #include "gromacs/fileio/xvgr.h"
+#include "gromacs/math/multidimarray.h"
+#include "gromacs/mdspan/extensions.h"
+#include "gromacs/mdspan/layouts.h"
+#include "gromacs/mdspan/mdspan.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/textwriter.h"
 
@@ -138,10 +151,13 @@ TEST_F(XvgioTest, readXvgRealWorks)
     const int                                            numRows    = 3;
     const int                                            numColumns = 2;
     MultiDimArray<std::vector<double>, dynamicExtents2D> xvgRefData(numRows, numColumns);
-    std::generate(begin(xvgRefData), end(xvgRefData), [n = 0.0]() mutable {
-        n += 1.1;
-        return n;
-    });
+    std::generate(begin(xvgRefData),
+                  end(xvgRefData),
+                  [n = 0.0]() mutable
+                  {
+                      n += 1.1;
+                      return n;
+                  });
     compareValues(xvgRefData.asConstView(), xvgTestData.asConstView());
 }
 

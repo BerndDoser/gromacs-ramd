@@ -43,10 +43,16 @@
 #include "constr.h"
 
 #include <cassert>
+#include <cinttypes>
+#include <climits>
 #include <cmath>
 #include <cstdlib>
 
 #include <algorithm>
+#include <array>
+#include <filesystem>
+#include <string>
+#include <utility>
 
 #include "gromacs/domdec/domdec.h"
 #include "gromacs/domdec/domdec_struct.h"
@@ -56,6 +62,7 @@
 #include "gromacs/fileio/pdbio.h"
 #include "gromacs/gmxlib/nrnb.h"
 #include "gromacs/math/arrayrefwithpadding.h"
+#include "gromacs/math/paddedvector.h"
 #include "gromacs/math/utilities.h"
 #include "gromacs/math/vec.h"
 #include "gromacs/mdlib/gmx_omp_nthreads.h"
@@ -69,19 +76,27 @@
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/pulling/pull.h"
 #include "gromacs/timing/wallcycle.h"
+#include "gromacs/topology/forcefieldparameters.h"
 #include "gromacs/topology/ifunc.h"
 #include "gromacs/topology/mtop_lookup.h"
 #include "gromacs/topology/mtop_util.h"
+#include "gromacs/topology/topology.h"
+#include "gromacs/topology/topology_enums.h"
 #include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/basedefinitions.h"
+#include "gromacs/utility/cstringutil.h"
+#include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/listoflists.h"
 #include "gromacs/utility/pleasecite.h"
+#include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/txtdump.h"
 
 namespace gmx
 {
+class Lincs;
 
 /* \brief Impl class for Constraints
  *
@@ -296,6 +311,10 @@ static void write_constr_pdb(const char*          fn,
                 continue;
             }
             ii = dd->globalAtomIndices[i];
+            if (!isValidGlobalAtom(ii))
+            {
+                continue;
+            }
         }
         else
         {
@@ -1001,7 +1020,9 @@ void Constraints::Impl::setConstraints(gmx_localtop_t*                     top,
          */
         if (ir.eConstrAlg == ConstraintAlgorithm::Lincs)
         {
+            wallcycle_sub_start(wcycle, WallCycleSubCounter::SetLincs);
             set_lincs(*idef, numAtoms_, inverseMasses_, lambda_, EI_DYNAMICS(ir.eI), cr, lincsd);
+            wallcycle_sub_stop(wcycle, WallCycleSubCounter::SetLincs);
         }
         if (ir.eConstrAlg == ConstraintAlgorithm::Shake)
         {
@@ -1022,7 +1043,9 @@ void Constraints::Impl::setConstraints(gmx_localtop_t*                     top,
 
     if (settled)
     {
+        wallcycle_sub_start(wcycle, WallCycleSubCounter::SetSettle);
         settled->setConstraints(idef->il[F_SETTLE], numHomeAtoms_, masses_, inverseMasses_);
+        wallcycle_sub_stop(wcycle, WallCycleSubCounter::SetSettle);
     }
 
     /* Make a selection of the local atoms for essential dynamics */
@@ -1059,6 +1082,20 @@ static std::vector<ListOfLists<int>> makeAtomToConstraintMappings(const gmx_mtop
         mapping.push_back(make_at2con(moltype, mtop.ffparams.iparams, flexibleConstraintTreatment));
     }
     return mapping;
+}
+
+bool hasTriangleConstraints(const gmx_mtop_t& mtop, const FlexibleConstraintTreatment flexibleConstraintTreatment)
+{
+    const auto atomToConstraintsPerMolType =
+            makeAtomToConstraintMappings(mtop, flexibleConstraintTreatment);
+    return std::any_of(mtop.molblock.begin(),
+                       mtop.molblock.end(),
+                       [&](const auto& molb)
+                       {
+                           const gmx_moltype_t& molt   = mtop.moltype[molb.type];
+                           const auto&          at2con = atomToConstraintsPerMolType[molb.type];
+                           return count_triangle_constraints(molt.ilist, at2con) > 0;
+                       });
 }
 
 Constraints::Constraints(const gmx_mtop_t&          mtop,

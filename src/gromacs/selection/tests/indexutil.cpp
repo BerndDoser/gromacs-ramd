@@ -45,9 +45,14 @@
 
 #include "gromacs/selection/indexutil.h"
 
+#include <memory>
+#include <string>
+#include <vector>
+
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include "gromacs/topology/block.h"
 #include "gromacs/topology/index.h"
 #include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/smalloc.h"
@@ -57,6 +62,12 @@
 
 #include "toputils.h"
 
+struct gmx_mtop_t;
+
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
@@ -710,3 +721,5 @@ TEST_F(IndexGroupsAndNamesTest, groupIndicesCorrect)
 
 
 } // namespace
+} // namespace test
+} // namespace gmx

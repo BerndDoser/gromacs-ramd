@@ -45,15 +45,20 @@
 #include <cmath>
 
 #include <memory>
+#include <string>
+#include <vector>
 
 #include <gtest/gtest.h>
 
 #include "gromacs/utility/exceptions.h"
+#include "gromacs/utility/real.h"
 
 #include "testutils/testasserts.h"
 #include "testutils/testfilemanager.h"
 
 namespace gmx
+{
+namespace test
 {
 namespace
 {
@@ -81,5 +86,5 @@ TEST_F(ManyAutocorrelationTest, DifferentLength)
 #endif
 
 } // namespace
-
+} // namespace test
 } // namespace gmx

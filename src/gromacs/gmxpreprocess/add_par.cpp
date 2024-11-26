@@ -39,10 +39,14 @@
 #include <cstring>
 
 #include <algorithm>
+#include <filesystem>
+#include <string>
+#include <vector>
 
 #include "gromacs/gmxpreprocess/grompp_impl.h"
 #include "gromacs/gmxpreprocess/notset.h"
 #include "gromacs/gmxpreprocess/toputil.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/smalloc.h"
@@ -61,10 +65,18 @@ void add_param(InteractionsOfType* ps, int ai, int aj, gmx::ArrayRef<const real>
     ps->interactionTypes.emplace_back(atoms, forceParm, s ? s : "");
 }
 
-void add_cmap_param(InteractionsOfType* ps, int ai, int aj, int ak, int al, int am, const char* s)
+void add_cmap_param(InteractionsOfType*       ps,
+                    int                       ai,
+                    int                       aj,
+                    int                       ak,
+                    int                       al,
+                    int                       am,
+                    gmx::ArrayRef<const real> c,
+                    const char*               s)
 {
-    std::vector<int> atoms = { ai, aj, ak, al, am };
-    ps->interactionTypes.emplace_back(atoms, gmx::ArrayRef<const real>{}, s ? s : "");
+    std::vector<int>  atoms = { ai, aj, ak, al, am };
+    std::vector<real> forceParm(c.begin(), c.end());
+    ps->interactionTypes.emplace_back(atoms, forceParm, s ? s : "");
 }
 
 void add_vsite2_param(InteractionsOfType* ps, int ai, int aj, int ak, real c0)

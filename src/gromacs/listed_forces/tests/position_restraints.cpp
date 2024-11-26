@@ -42,12 +42,18 @@
 #include "gromacs/listed_forces/position_restraints.h"
 
 #include <cmath>
+#include <cstddef>
 
+#include <algorithm>
+#include <array>
+#include <iterator>
 #include <memory>
+#include <string>
+#include <tuple>
+#include <vector>
 
 #include <gtest/gtest.h>
 
-#include "gromacs/gmxlib/nrnb.h"
 #include "gromacs/listed_forces/listed_forces.h"
 #include "gromacs/math/vec.h"
 #include "gromacs/math/vectypes.h"
@@ -56,15 +62,20 @@
 #include "gromacs/mdtypes/forcerec.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/interaction_const.h"
+#include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/mdtypes/mdatom.h"
-#include "gromacs/mdtypes/nblist.h"
 #include "gromacs/mdtypes/simulation_workload.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/tables/forcetable.h"
 #include "gromacs/topology/forcefieldparameters.h"
 #include "gromacs/topology/idef.h"
+#include "gromacs/topology/ifunc.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/fatalerror.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/stringstream.h"
+#include "gromacs/utility/stringutil.h"
 
 #include "testutils/refdata.h"
 #include "testutils/testasserts.h"
@@ -90,7 +101,6 @@ protected:
     t_pbc   pbc_;
     PbcType pbcType_;
 
-    t_nrnb                           nrnb_;
     t_forcerec                       fr_;
     InteractionDefinitions           idef_;
     gmx_enerdata_t                   enerd_;
@@ -114,9 +124,10 @@ protected:
         FloatingPointTolerance tolerance = relativeToleranceAsFloatingPoint(1.0, c_precisionTolerance);
         checker_.setDefaultTolerance(tolerance);
 
-        fr_.rc_scaling    = refCoordScaling_;
-        fr_.pbcType       = pbcType_;
-        fr_.posres_com[1] = 0.5;
+        fr_.rc_scaling = refCoordScaling_;
+        fr_.pbcType    = pbcType_;
+        fr_.posresCom.emplace_back(0.0_real, 0.5_real, 0.0_real);
+        fr_.posresComB.emplace_back(0.0_real, 0.5_real, 0.0_real);
     }
 
     //! Prepares the test with the coordinate and force constant input.
@@ -156,18 +167,48 @@ TEST_P(PositionRestraintsTest, BasicPosResNoFreeEnergy)
     const std::vector<RVec> referencePositions = { { 0.0, 0.0, 0.0 }, { 0.5, 0.6, 0.0 } };
     const std::vector<RVec> forceConstants     = { { 1000, 500, 250 }, { 0, 200, 400 } };
     setValues(positions, referencePositions, forceConstants);
-    posres_wrapper(&nrnb_,
-                   idef_,
-                   &pbc_,
-                   as_rvec_array(x_.data()),
-                   &enerd_,
-                   c_emptyLambdas,
-                   &fr_,
-                   forceWithVirial_.get());
+    std::vector<RVec> centersOfMassScaledBuffer  = { { 0.0, 0.0, 0.0 } };
+    std::vector<RVec> centersOfMassBScaledBuffer = { { 0.0, 0.0, 0.0 } };
+    // We cannot store C-style array rvec4 in an std::vector, so we use real and reinterpret
+    std::vector<real> forcesStorage(positions.size() * 4);
+    ArrayRef<rvec4>   forces =
+            arrayRefFromArray(reinterpret_cast<rvec4*>(forcesStorage.data()), positions.size());
+    for (auto& f : forces)
+    {
+        for (int d = 0; d < 4; d++)
+        {
+            f[d] = 0;
+        }
+    }
+    real dvdl   = 0;
+    RVec virial = { 0.0_real, 0.0_real, 0.0_real };
+
+    const real v = posres_wrapper(idef_.il[F_POSRES].iatoms,
+                                  idef_.iparams_posres,
+                                  pbc_,
+                                  as_rvec_array(x_.data()),
+                                  c_emptyLambdas,
+                                  &fr_,
+                                  {},
+                                  centersOfMassScaledBuffer,
+                                  centersOfMassBScaledBuffer,
+                                  forces,
+                                  &virial,
+                                  &dvdl);
+    // Copy from 4-component vector buffer to forceWithVirial
+    for (Index i = 0; i < gmx::ssize(forces); i++)
+    {
+        for (int d = 0; d < DIM; d++)
+        {
+            forceWithVirial_->force_[i][d] = forces[i][d];
+        }
+    }
+    forceWithVirial_->addVirialContribution(virial);
+
     checker_.checkSequence(
             std::begin(forceWithVirial_->force_), std::end(forceWithVirial_->force_), "Forces");
     checker_.checkSequenceArray(3, forceWithVirial_->getVirial(), "Virial contribution");
-    checker_.checkReal(enerd_.term[F_POSRES], "Potential energy");
+    checker_.checkReal(v, "Potential energy");
 }
 
 //! PBC values for testing

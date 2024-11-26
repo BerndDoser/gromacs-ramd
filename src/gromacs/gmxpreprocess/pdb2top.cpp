@@ -38,10 +38,14 @@
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #include <algorithm>
+#include <array>
+#include <iterator>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "gromacs/fileio/pdbio.h"
@@ -59,10 +63,15 @@
 #include "gromacs/gmxpreprocess/toputil.h"
 #include "gromacs/math/functions.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/topology/atoms.h"
+#include "gromacs/topology/ifunc.h"
 #include "gromacs/topology/residuetypes.h"
 #include "gromacs/topology/symtab.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/binaryinformation.h"
 #include "gromacs/utility/cstringutil.h"
+#include "gromacs/utility/datafilefinder.h"
 #include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/fatalerror.h"
@@ -475,9 +484,9 @@ static int name2type(t_atoms*                               at,
         prevresind = resind;
         if (at->atom[i].resind != resind)
         {
-            resind     = at->atom[i].resind;
+            resind = at->atom[i].resind;
             bool bProt = namedResidueHasType(residueTypeMap, *(at->resinfo[resind].name), "Protein");
-            bNterm     = bProt && (resind == 0);
+            bNterm = bProt && (resind == 0);
             if (resind > 0)
             {
                 nmissat += missing_atoms(&usedPpResidues[prevresind], prevresind, at, i0, i, logger);
@@ -750,18 +759,20 @@ static void do_ssbonds(InteractionsOfType*                ps,
 {
     for (const auto& bond : ssbonds)
     {
-        int ri = bond.firstResidue;
-        int rj = bond.secondResidue;
-        int ai = search_res_atom(bond.firstAtom.c_str(), ri, atoms, "special bond", bAllowMissing);
-        int aj = search_res_atom(bond.secondAtom.c_str(), rj, atoms, "special bond", bAllowMissing);
-        if ((ai == -1) || (aj == -1))
+        const int                ri = bond.firstResidue;
+        const int                rj = bond.secondResidue;
+        const std::optional<int> ai =
+                search_res_atom(bond.firstAtom.c_str(), ri, atoms, "special bond", bAllowMissing);
+        const std::optional<int> aj =
+                search_res_atom(bond.secondAtom.c_str(), rj, atoms, "special bond", bAllowMissing);
+        if (!ai.has_value() || !aj.has_value())
         {
             gmx_fatal(FARGS,
                       "Trying to make impossible special bond (%s-%s)!",
                       bond.firstAtom.c_str(),
                       bond.secondAtom.c_str());
         }
-        add_param(ps, ai, aj, {}, nullptr);
+        add_param(ps, ai.value(), aj.value(), {}, nullptr);
     }
 }
 
@@ -800,27 +811,32 @@ static void at2bonds(InteractionsOfType*                  psb,
              * for missing atoms in bonds, as the hydrogens and terminal atoms
              * have not been added yet.
              */
-            int ai = search_atom(patch.ai().c_str(), i, atoms, ptr, TRUE, cyclicBondsIndex);
-            int aj = search_atom(patch.aj().c_str(), i, atoms, ptr, TRUE, cyclicBondsIndex);
-            if (ai != -1 && aj != -1)
+            const std::optional<int> ai =
+                    search_atom(patch.ai().c_str(), i, atoms, ptr, TRUE, cyclicBondsIndex);
+            const std::optional<int> aj =
+                    search_atom(patch.aj().c_str(), i, atoms, ptr, TRUE, cyclicBondsIndex);
+            if (ai.has_value() && aj.has_value())
             {
-                real dist2 = distance2(x[ai], x[aj]);
+                real dist2 = distance2(x[ai.value()], x[aj.value()]);
                 if (dist2 > long_bond_dist2)
-
                 {
                     GMX_LOG(logger.warning)
                             .asParagraph()
-                            .appendTextFormatted(
-                                    "Long Bond (%d-%d = %g nm)", ai + 1, aj + 1, std::sqrt(dist2));
+                            .appendTextFormatted("Long Bond (%d-%d = %g nm)",
+                                                 ai.value() + 1,
+                                                 aj.value() + 1,
+                                                 std::sqrt(dist2));
                 }
                 else if (dist2 < short_bond_dist2)
                 {
                     GMX_LOG(logger.warning)
                             .asParagraph()
-                            .appendTextFormatted(
-                                    "Short Bond (%d-%d = %g nm)", ai + 1, aj + 1, std::sqrt(dist2));
+                            .appendTextFormatted("Short Bond (%d-%d = %g nm)",
+                                                 ai.value() + 1,
+                                                 aj.value() + 1,
+                                                 std::sqrt(dist2));
                 }
-                add_param(psb, ai, aj, {}, patch.s.c_str());
+                add_param(psb, ai.value(), aj.value(), {}, patch.s.c_str());
             }
         }
         /* add bonds from list of hacks (each added atom gets a bond) */
@@ -1102,11 +1118,12 @@ void get_hackblocks_rtp(std::vector<MoleculePatchDatabase>*    globalPatches,
             if (patch->nr != 0)
             {
                 /* find atom in restp */
-                auto found = std::find_if(
-                        posres->atomname.begin(), posres->atomname.end(), [&patch](char** name) {
-                            return (patch->oname.empty() && patch->a[0] == *name)
-                                   || (patch->oname == *name);
-                        });
+                auto found = std::find_if(posres->atomname.begin(),
+                                          posres->atomname.end(),
+                                          [&patch](char** name) {
+                                              return (patch->oname.empty() && patch->a[0] == *name)
+                                                     || (patch->oname == *name);
+                                          });
 
                 if (found == posres->atomname.end())
                 {
@@ -1239,10 +1256,10 @@ static bool match_atomnames_with_rtp_atom(t_atoms*                     pdba,
 
             /* This atom still has the old name, rename it */
             std::string newnm = patch->nname;
-            auto        found = std::find_if(
-                    localPpResidue->atomname.begin(),
-                    localPpResidue->atomname.end(),
-                    [&newnm](char** name) { return gmx::equalCaseInsensitive(newnm, *name); });
+            auto        found = std::find_if(localPpResidue->atomname.begin(),
+                                      localPpResidue->atomname.end(),
+                                      [&newnm](char** name)
+                                      { return gmx::equalCaseInsensitive(newnm, *name); });
             if (found == localPpResidue->atomname.end())
             {
                 /* The new name is not present in the rtp.
@@ -1271,11 +1288,11 @@ static bool match_atomnames_with_rtp_atom(t_atoms*                     pdba,
                             start_at = gmx::formatString(
                                     "%s%d", singlePatch.hack[k].nname.c_str(), anmnr - 1);
                         }
-                        auto found2 = std::find_if(localPpResidue->atomname.begin(),
-                                                   localPpResidue->atomname.end(),
-                                                   [&start_at](char** name) {
-                                                       return gmx::equalCaseInsensitive(start_at, *name);
-                                                   });
+                        auto found2 =
+                                std::find_if(localPpResidue->atomname.begin(),
+                                             localPpResidue->atomname.end(),
+                                             [&start_at](char** name)
+                                             { return gmx::equalCaseInsensitive(start_at, *name); });
                         if (found2 == localPpResidue->atomname.end())
                         {
                             gmx_fatal(FARGS,
@@ -1327,10 +1344,10 @@ static bool match_atomnames_with_rtp_atom(t_atoms*                     pdba,
             /* This is a delete entry, check if this atom is present
              * in the rtp entry of this residue.
              */
-            auto found3 = std::find_if(
-                    localPpResidue->atomname.begin(),
-                    localPpResidue->atomname.end(),
-                    [&oldnm](char** name) { return gmx::equalCaseInsensitive(oldnm, *name); });
+            auto found3 = std::find_if(localPpResidue->atomname.begin(),
+                                       localPpResidue->atomname.end(),
+                                       [&oldnm](char** name)
+                                       { return gmx::equalCaseInsensitive(oldnm, *name); });
             if (found3 == localPpResidue->atomname.end())
             {
                 /* This atom is not present in the rtp entry,
@@ -1376,10 +1393,10 @@ void match_atomnames_with_rtp(gmx::ArrayRef<PreprocessResidue>     usedPpResidue
     {
         const char*        oldnm          = *pdba->atomname[i];
         PreprocessResidue* localPpResidue = &usedPpResidues[pdba->atom[i].resind];
-        auto               found          = std::find_if(
-                localPpResidue->atomname.begin(), localPpResidue->atomname.end(), [&oldnm](char** name) {
-                    return gmx::equalCaseInsensitive(oldnm, *name);
-                });
+        auto               found          = std::find_if(localPpResidue->atomname.begin(),
+                                  localPpResidue->atomname.end(),
+                                  [&oldnm](char** name)
+                                  { return gmx::equalCaseInsensitive(oldnm, *name); });
         if (found == localPpResidue->atomname.end())
         {
             /* Not found yet, check if we have to rename this atom */
@@ -1450,16 +1467,15 @@ static void gen_cmap(InteractionsOfType*                    psb,
                         break;
                     }
                 }
-
-                cmap_atomid[k] = search_atom(pname, i, atoms, ptr, TRUE, cyclicBondsIndex);
-                bAddCMAP       = bAddCMAP && (cmap_atomid[k] != -1);
+                const std::optional<int> atomIndex =
+                        search_atom(pname, i, atoms, ptr, TRUE, cyclicBondsIndex);
+                bAddCMAP = bAddCMAP && atomIndex.has_value();
                 if (!bAddCMAP)
                 {
-                    /* This break is necessary, because cmap_atomid[k]
-                     * == -1 cannot be safely used as an index
-                     * into the atom array. */
+                    // Break because this CMAP interaction does not match
                     break;
                 }
+                cmap_atomid[k]         = atomIndex.value();
                 int this_residue_index = atoms->atom[cmap_atomid[k]].resind;
                 if (0 == k)
                 {
@@ -1493,6 +1509,7 @@ static void gen_cmap(InteractionsOfType*                    psb,
                                cmap_atomid[2],
                                cmap_atomid[3],
                                cmap_atomid[4],
+                               {},
                                b.s.c_str());
             }
         }
@@ -1607,7 +1624,7 @@ void pdb2top(FILE*                                  top_file,
             .asParagraph()
             .appendTextFormatted("Generating angles, dihedrals and pairs...");
     snew(excls, atoms->nr);
-    gen_pad(atoms, usedPpResidues, plist, excls, globalPatches, bAllowMissing, cyclicBondsIndex);
+    gen_pad(atoms, usedPpResidues, plist, excls, globalPatches, bAllowMissing, cyclicBondsIndex, ssbonds);
 
     /* Make CMAP */
     if (bCmap)

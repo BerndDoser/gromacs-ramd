@@ -40,14 +40,20 @@
  */
 #include "gmxpre.h"
 
+#include <string>
 #include <vector>
 
 #include <gtest/gtest.h>
 
 #include "gromacs/math/gmxcomplex.h"
+#include "gromacs/utility/real.h"
 
 #include "testutils/refdata.h"
 
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
@@ -180,3 +186,5 @@ TEST(ComplexNumberTest, ComplexAbs2)
 }
 
 } // namespace
+} // namespace test
+} // namespace gmx

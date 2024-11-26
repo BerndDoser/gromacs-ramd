@@ -43,10 +43,14 @@
 #include "gromacs/topology/idef.h"
 
 #include <array>
+#include <string>
+#include <vector>
 
 #include <gtest/gtest.h>
 
 namespace gmx
+{
+namespace test
 {
 namespace
 {
@@ -144,5 +148,5 @@ TEST(InteractionListTest, ClearingWorks)
 }
 
 } // namespace
-
+} // namespace test
 } // namespace gmx

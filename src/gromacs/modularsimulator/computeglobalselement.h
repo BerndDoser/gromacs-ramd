@@ -43,6 +43,12 @@
 #ifndef GMX_MODULARSIMULATOR_COMPUTEGLOBALSELEMENT_H
 #define GMX_MODULARSIMULATOR_COMPUTEGLOBALSELEMENT_H
 
+#include <cstdio>
+
+#include <functional>
+#include <memory>
+#include <optional>
+
 #include "gromacs/mdlib/simulationsignal.h"
 #include "gromacs/mdlib/vcm.h"
 
@@ -54,6 +60,10 @@
 struct gmx_global_stat;
 struct gmx_wallcycle;
 struct t_nrnb;
+struct gmx_mtop_t;
+struct t_commrec;
+struct t_forcerec;
+struct t_inputrec;
 
 namespace gmx
 {
@@ -62,6 +72,9 @@ class LegacySimulatorData;
 class MDAtoms;
 class MDLogger;
 class ObservablesReducer;
+class Constraints;
+class GlobalCommunicationHelper;
+class ModularSimulatorAlgorithmBuilderHelper;
 
 //! \addtogroup module_modularsimulator
 //! \{
@@ -156,11 +169,11 @@ public:
      */
     static ISimulatorElement* getElementPointerImpl(LegacySimulatorData* legacySimulatorData,
                                                     ModularSimulatorAlgorithmBuilderHelper* builderHelper,
-                                                    StatePropagatorData*        statePropagatorData,
-                                                    EnergyData*                 energyData,
+                                                    StatePropagatorData* statePropagatorData,
+                                                    EnergyData*          energyData,
                                                     FreeEnergyPerturbationData* freeEnergyPerturbationData,
                                                     GlobalCommunicationHelper* globalCommunicationHelper,
-                                                    ObservablesReducer*        observablesReducer);
+                                                    ObservablesReducer* observablesReducer);
 
 private:
     //! IEnergySignallerClient implementation

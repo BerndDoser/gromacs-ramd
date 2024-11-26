@@ -46,11 +46,27 @@
 #ifndef NBLIB_LISTEDFORCES_CONVERSION_HPP
 #define NBLIB_LISTEDFORCES_CONVERSION_HPP
 
+#include <cmath>
+#include <cstddef>
+
+#include <array>
 #include <memory>
+#include <tuple>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 #include "listed_forces/conversionscommon.h"
 
 #include "gromacs/topology/forcefieldparameters.h"
+#include "gromacs/topology/idef.h"
+
+#include "nblib/basicdefinitions.h"
+#include "nblib/exception.h"
+#include "nblib/listed_forces/bondtypes.h"
+#include "nblib/listed_forces/definitions.h"
+#include "nblib/util/traits.hpp"
+#include "nblib/util/util.hpp"
 
 namespace nblib
 {
@@ -465,9 +481,8 @@ convertToGmxInteractions(const ListedInteractionData& interactions)
     gmx_ffparams_t&         ffparams = *ffparamsHolder;
     InteractionDefinitions& idef     = *idefHolder;
 
-    auto copyParamsOneType = [&ffparams](const auto& interactionElement) {
-        detail::transferParameters(interactionElement, ffparams);
-    };
+    auto copyParamsOneType = [&ffparams](const auto& interactionElement)
+    { detail::transferParameters(interactionElement, ffparams); };
     for_each_tuple(copyParamsOneType, interactions);
 
     // since gmx_ffparams_t.iparams is a flattened vector over all interaction types,
@@ -475,7 +490,8 @@ convertToGmxInteractions(const ListedInteractionData& interactions)
     // in the flattened iparams vectors
     int                                                       acc = 0;
     std::array<int, std::tuple_size_v<ListedInteractionData>> indexOffsets{ 0 };
-    auto extractNIndices = [&indexOffsets, &acc](const auto& interactionElement) {
+    auto extractNIndices = [&indexOffsets, &acc](const auto& interactionElement)
+    {
         constexpr int elementIndex =
                 FindIndex<std::decay_t<decltype(interactionElement)>, ListedInteractionData>::value;
         indexOffsets[elementIndex] = acc;
@@ -483,7 +499,8 @@ convertToGmxInteractions(const ListedInteractionData& interactions)
     };
     for_each_tuple(extractNIndices, interactions);
 
-    auto copyIndicesOneType = [&idef, &indexOffsets](const auto& interactionElement) {
+    auto copyIndicesOneType = [&idef, &indexOffsets](const auto& interactionElement)
+    {
         constexpr int elementIndex =
                 FindIndex<std::decay_t<decltype(interactionElement)>, ListedInteractionData>::value;
         detail::transferIndices(interactionElement, idef, indexOffsets[elementIndex]);

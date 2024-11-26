@@ -42,7 +42,12 @@
 #include <cstring>
 
 #include <mutex>
+#include <string>
 #include <vector>
+
+#include <thread_mpi/lock.h>
+
+#include "gromacs/fileio/xdrf.h"
 
 #if HAVE_IO_H
 #    include <io.h>

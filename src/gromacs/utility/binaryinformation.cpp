@@ -46,6 +46,7 @@
 #include <climits>
 
 #include <filesystem>
+#include <vector>
 
 #if GMX_FFT_FFTW3 || GMX_FFT_ARMPL_FFTW3
 // Needed for construction of the FFT library description string
@@ -127,9 +128,10 @@ void writeVectorAsColumns(gmx::TextWriter*                writer,
     writer->writeLine(formatCentered(outputWidth, header.c_str()));
 
     const std::size_t maxWidth =
-            std::accumulate(v.begin(), v.end(), std::size_t{ 0 }, [](const auto a, const auto& s) {
-                return std::max(a, s.length());
-            });
+            std::accumulate(v.begin(),
+                            v.end(),
+                            std::size_t{ 0 },
+                            [](const auto a, const auto& s) { return std::max(a, s.length()); });
 
     const int columns     = outputWidth / (maxWidth + 1);
     const int columnWidth = outputWidth / columns;
@@ -224,13 +226,13 @@ std::string describeOneMkl()
 {
 #if GMX_GPU_FFT_ONEMKL
     std::string description = "oneMKL interface library (backends:";
-#    ifdef ONEMKL_USING_CUFFT_BACKEND
+#    ifdef ENABLE_CUFFT_BACKEND
     description += " cuFFT";
 #    endif
-#    ifdef ONEMKL_USING_MKLGPU_BACKEND
+#    ifdef ENABLE_MKLGPU_BACKEND
     description += " MKLGPU";
 #    endif
-#    ifdef ONEMKL_USING_ROCFFT_BACKEND
+#    ifdef ENABLE_ROCFFT_BACKEND
     description += " rocFFT";
 #    endif
     description += ")";
@@ -456,7 +458,7 @@ void gmx_print_version_info(gmx::TextWriter* writer)
     writer->writeLine("TNG support:         disabled");
 #endif
 #if GMX_USE_HWLOC
-    writer->writeLine(formatString("Hwloc support:       hwloc-%s", HWLOC_VERSION));
+    writer->writeLine(formatString("Hwloc support:       hwloc-%s", GMX_HWLOC_VERSION));
 #else
     writer->writeLine("Hwloc support:       disabled");
 #endif
@@ -524,16 +526,16 @@ void gmx_print_version_info(gmx::TextWriter* writer)
     writer->writeLine("CUDA runtime:        " + gmx::getCudaRuntimeVersionString());
 #endif
 #if GMX_SYCL_DPCPP
+    writer->writeLine("SYCL version:        oneAPI DPC++ " + gmx::getSyclCompilerVersion());
     writer->writeLine(formatString("SYCL compiler flags: %s", SYCL_DPCPP_COMPILER_FLAGS));
     writer->writeLine(formatString("SYCL linker flags:   %s", SYCL_DPCPP_LINKER_FLAGS));
-    writer->writeLine("SYCL DPC++ version:  " + gmx::getSyclCompilerVersion());
 #endif
-#if GMX_SYCL_HIPSYCL
-    writer->writeLine(formatString("hipSYCL launcher:    %s", SYCL_HIPSYCL_COMPILER_LAUNCHER));
-    writer->writeLine(formatString("hipSYCL flags:       %s", SYCL_HIPSYCL_COMPILER_FLAGS));
-    writer->writeLine(formatString("hipSYCL GPU flags:   %s", SYCL_HIPSYCL_DEVICE_COMPILER_FLAGS));
-    writer->writeLine(formatString("hipSYCL targets:     %s", SYCL_HIPSYCL_TARGETS));
-    writer->writeLine("hipSYCL version:     " + gmx::getSyclCompilerVersion());
+#if GMX_SYCL_ACPP
+    writer->writeLine("SYCL version:        " + gmx::getSyclCompilerVersion());
+    writer->writeLine(formatString("SYCL compiler:       %s", SYCL_ACPP_COMPILER_LAUNCHER));
+    writer->writeLine(formatString("SYCL compiler flags: %s", SYCL_ACPP_COMPILER_FLAGS));
+    writer->writeLine(formatString("SYCL GPU flags:      %s", SYCL_ACPP_DEVICE_COMPILER_FLAGS));
+    writer->writeLine(formatString("SYCL targets:        %s", SYCL_ACPP_TARGETS));
 #endif
 #if GMX_GPU_HIP
     writer->writeLine(formatString("HIP compiler:        %s", HIP_COMPILER_INFO));

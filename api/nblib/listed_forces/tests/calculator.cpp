@@ -44,16 +44,37 @@
 
 #include "nblib/listed_forces/calculator.h"
 
+#include <cstddef>
+
+#include <array>
+#include <iterator>
+#include <memory>
+#include <numeric>
+#include <string>
 #include <valarray>
+#include <vector>
 
 #include <gtest/gtest.h>
 
 #include "listed_forces/dataflow.hpp"
+#include "listed_forces/traits.h"
+
+#include "gromacs/math/vectypes.h"
+#include "gromacs/mdtypes/md_enums.h"
+#include "gromacs/utility/arrayref.h"
 
 #include "testutils/refdata.h"
 #include "testutils/testasserts.h"
 
+#include "nblib/basicdefinitions.h"
+#include "nblib/box.h"
+#include "nblib/listed_forces/bondtypes.h"
+#include "nblib/listed_forces/definitions.h"
+#include "nblib/util/traits.hpp"
+#include "nblib/vector.h"
+
 #include "linear_chain_input.hpp"
+#include "pbc.hpp"
 #include "testhelpers.h"
 
 
@@ -145,7 +166,7 @@ TEST_F(ListedExampleData, ComputeHarmonicBondEnergies)
     gmx::ArrayRef<const InteractionIndex<HarmonicBondType>> indices =
             pickType<HarmonicBondType>(interactions).indices;
     gmx::ArrayRef<const HarmonicBondType> bonds = pickType<HarmonicBondType>(interactions).parameters;
-    real                                  energy = computeForces(indices, bonds, x, &forces, *pbc);
+    real energy = computeForces(indices, bonds, x, &forces, *pbc);
 
     RefDataChecker vector3DTest(1e-4);
     vector3DTest.testReal(energy, "Bond energy");

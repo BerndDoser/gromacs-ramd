@@ -40,11 +40,18 @@
 
 #include "gromacs/mdspan/accessor_policy.h"
 
+#include <cstddef>
+
 #include <array>
+#include <string>
 
 #include <gtest/gtest.h>
 
 namespace gmx
+{
+namespace test
+{
+namespace
 {
 
 class BasicAccessorPolicy : public ::testing::Test
@@ -91,4 +98,6 @@ TEST_F(BasicAccessorPolicy, CopyAccessor)
     }
 }
 
+} // namespace
+} // namespace test
 } // namespace gmx

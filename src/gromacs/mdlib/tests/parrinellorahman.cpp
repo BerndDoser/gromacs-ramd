@@ -34,19 +34,35 @@
 #include "gmxpre.h"
 
 #include <cmath>
+#include <cstdint>
+#include <cstdlib>
+
+#include <array>
+#include <initializer_list>
+#include <optional>
+#include <string>
+#include <tuple>
+#include <vector>
 
 #include <gtest/gtest.h>
 
 #include "gromacs/math/matrix.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/mdlib/coupling.h"
 #include "gromacs/mdtypes/inputrec.h"
+#include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/pbcutil/boxutilities.h"
+#include "gromacs/utility/basedefinitions.h"
+#include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/logger.h"
 #include "gromacs/utility/loggerbuilder.h"
+#include "gromacs/utility/real.h"
+#include "gromacs/utility/strconvert.h"
 #include "gromacs/utility/stringstream.h"
 #include "gromacs/utility/stringutil.h"
 
+#include "testutils/naming.h"
 #include "testutils/refdata.h"
 #include "testutils/testasserts.h"
 
@@ -58,16 +74,16 @@ namespace
 {
 
 //! GoogleTest expectations about whether matrices are diagonal or not
-void isAlmostDiagonalMatrix(const char* name, const Matrix3x3& m)
+void isAlmostDiagonalMatrix(const char* name, const Matrix3x3& matrix)
 {
     SCOPED_TRACE(formatString("Testing that %s is almost diagonal", name));
-    FloatingPointTolerance tolerance = absoluteTolerance(2e-5);
-    EXPECT_REAL_EQ_TOL(0, m(XX, YY), tolerance);
-    EXPECT_REAL_EQ_TOL(0, m(XX, ZZ), tolerance);
-    EXPECT_REAL_EQ_TOL(0, m(YY, XX), tolerance);
-    EXPECT_REAL_EQ_TOL(0, m(YY, ZZ), tolerance);
-    EXPECT_REAL_EQ_TOL(0, m(ZZ, XX), tolerance);
-    EXPECT_REAL_EQ_TOL(0, m(ZZ, YY), tolerance);
+    const FloatingPointTolerance tolerance = absoluteTolerance(2e-5);
+    EXPECT_REAL_EQ_TOL(0, matrix(XX, YY), tolerance);
+    EXPECT_REAL_EQ_TOL(0, matrix(XX, ZZ), tolerance);
+    EXPECT_REAL_EQ_TOL(0, matrix(YY, XX), tolerance);
+    EXPECT_REAL_EQ_TOL(0, matrix(YY, ZZ), tolerance);
+    EXPECT_REAL_EQ_TOL(0, matrix(ZZ, XX), tolerance);
+    EXPECT_REAL_EQ_TOL(0, matrix(ZZ, YY), tolerance);
 }
 
 /*! \brief Some kinds of matrices of simulation box pressure
@@ -84,17 +100,17 @@ enum class PressureMatrixType
     Count
 };
 
-//! Helper for describing tests
-const char* enumValueToString(PressureMatrixType enumValue)
-{
-    // These are used in naming test reference data files, and we have
-    // hard limits on file lengths, so we must abbreviate.
-    static constexpr gmx::EnumerationArray<PressureMatrixType, const char*> names = {
-        "unif diag", "part unif diag", "diagonal", "general", "extreme"
-    };
-    return names[enumValue];
-}
-
+/*! \brief Helper array for describing tests
+ *
+ * These are used in naming test reference data files, and we have
+ * hard limits on file lengths, so we must abbreviate. */
+constexpr gmx::EnumerationArray<PressureMatrixType, const char*> sc_pressureMatrixTypeNames = {
+    "pmt_unif diag",
+    "pmt_part unif diag",
+    "pmt_diagonal",
+    "pmt_general",
+    "pmt_extreme"
+};
 
 //! Some matrices of simulation box pressure
 const EnumerationArray<PressureMatrixType, Matrix3x3> c_pressureMatrices = {
@@ -130,19 +146,14 @@ enum class BoxShape : int
     Count
 };
 
-//! Version of enumValueToString with abbreviated names
-const char* enumValueToStringForTestName(const BoxShape enumValue)
-{
-    static constexpr gmx::EnumerationArray<BoxShape, const char*> names = {
-        "cubic",
-        "rect", // abbreviates "rectilinear"
-        "rds",  // abbreviates "rhombic dodecahedron XY square"
-        "rdh",  // abbreviates "rhombic dodecahedron XY hexagon"
-        "to",   // abbreviates "truncated octahedron",
-        "other"
-    };
-    return names[enumValue];
-}
+constexpr gmx::EnumerationArray<BoxShape, const char*> sc_boxShapeNames = {
+    "shape_cubic",
+    "shape_rect", // abbreviates "rectilinear"
+    "shape_rds",  // abbreviates "rhombic dodecahedron XY square"
+    "shape_rdh",  // abbreviates "rhombic dodecahedron XY hexagon"
+    "shape_to",   // abbreviates "truncated octahedron",
+    "shape_other"
+};
 
 /*! \brief Convenience typedef of the test input parameters
  *
@@ -156,33 +167,33 @@ const char* enumValueToStringForTestName(const BoxShape enumValue)
 using ParrinelloRahmanTestParameters =
         std::tuple<PressureCouplingOptions, PressureMatrixType, BoxShape, Matrix3x3, Matrix3x3>;
 
-//! Help GoogleTest name our tests
-std::string nameOfTest(const testing::TestParamInfo<ParrinelloRahmanTestParameters>& info)
+//! Helper function for naming tests
+std::string pressureCouplingOptionsToString(const PressureCouplingOptions options)
 {
-    auto [options, matrixType, shape, box, boxVelocities] = info.param;
-    std::string testName                                  = formatString(
-            "%s_"
-            "pmt_%s_" // pmt abbreviates "pressure matrix type"
-            "shape_%s_"
-            "box_%g_"
-            "boxv_%g",
-            enumValueToString(options.epct),
-            enumValueToString(matrixType),
-            enumValueToStringForTestName(shape),
-            box(XX, XX),
-            boxVelocities(XX, XX));
-
-    // Note that the returned names must be unique and may use only
-    // alphanumeric ASCII characters. It's not supposed to contain
-    // underscores (see the GoogleTest FAQ
-    // why-should-test-suite-names-and-test-names-not-contain-underscore),
-    // but doing so works for now, is likely to remain so, and makes
-    // such test names much more readable.
-    testName = replaceAll(testName, "-", "_");
-    testName = replaceAll(testName, ".", "_");
-    testName = replaceAll(testName, " ", "_");
-    return testName;
+    return enumValueToString(options.epct);
 }
+
+//! Helper functor for naming tests
+struct Matrix3x3ToString
+{
+    std::string prefix;
+    std::string operator()(const Matrix3x3& matrix) const
+    {
+        return prefix + ' ' + doubleToString(matrix(XX, XX));
+    }
+};
+
+// At least gcc-12 warns about a possible uninitialized value in the
+// destructor of std::function, but this seems to be overzealous.
+GCC_DIAGNOSTIC_IGNORE("-Wmaybe-uninitialized")
+//! Tuple of formatters to name the parameterized test cases
+const NameOfTestFromTuple<ParrinelloRahmanTestParameters> sc_testNamer{ std::make_tuple(
+        pressureCouplingOptionsToString,
+        sc_pressureMatrixTypeNames,
+        sc_boxShapeNames,
+        Matrix3x3ToString{ "box" },
+        Matrix3x3ToString{ "boxv" }) };
+GCC_DIAGNOSTIC_RESET
 
 //! Test fixture - abbreviated ParrinelloRahman to ParrRahm for shorter refdata filenames
 using ParrRahmTest = ::testing::TestWithParam<ParrinelloRahmanTestParameters>;
@@ -223,8 +234,8 @@ TEST_P(ParrRahmTest, Works)
     StringOutputStream logStream;
     LoggerBuilder      builder;
     builder.addTargetStream(MDLogger::LogLevel::Warning, &logStream);
-    LoggerOwner     logOwner = builder.build();
-    const MDLogger& mdlog    = logOwner.logger();
+    const LoggerOwner logOwner = builder.build();
+    const MDLogger&   mdlog    = logOwner.logger();
 
     // Call the Parrinello-Rahman pressure-coupling function to produce
     // new values in legacyBoxVelocity, M, and mu
@@ -246,9 +257,9 @@ TEST_P(ParrRahmTest, Works)
     // properly.
     {
         SCOPED_TRACE("Check the diagonal values of mu are equal");
-        const uint64_t         singleUlpDiff = 10;
-        const uint64_t         doubleUlpDiff = boxShape == BoxShape::Other ? 10 : 5;
-        FloatingPointTolerance tolerance(0, 0, 0, 0, singleUlpDiff, doubleUlpDiff, false);
+        const uint64_t               singleUlpDiff = 10;
+        const uint64_t               doubleUlpDiff = boxShape == BoxShape::Other ? 10 : 5;
+        const FloatingPointTolerance tolerance(0, 0, 0, 0, singleUlpDiff, doubleUlpDiff, false);
         EXPECT_REAL_EQ_TOL(mu(XX, XX), mu(YY, YY), tolerance);
         EXPECT_REAL_EQ_TOL(mu(XX, XX), mu(ZZ, ZZ), tolerance);
         SCOPED_TRACE("Check the diagonal values of M are equal");
@@ -410,14 +421,15 @@ const EnumerationArray<BoxShape, std::vector<Matrix3x3>> c_boxVelocities = {
 };
 
 //! Sets of pressure-coupling MDP options to use in tests
-const std::vector<PressureCouplingOptions> c_options = []() {
+const std::vector<PressureCouplingOptions> c_options = []()
+{
     PressureCouplingOptions options;
-    options.epc               = PressureCoupling::ParrinelloRahman;
-    options.tau_p             = 1.;
-    Matrix3x3 compressibility = diagonalMatrix<real, 3, 3>(4.5e-5);
+    options.epc                     = PressureCoupling::ParrinelloRahman;
+    options.tau_p                   = 1.;
+    const Matrix3x3 compressibility = diagonalMatrix<real, 3, 3>(4.5e-5);
     fillLegacyMatrix(compressibility, options.compress);
 
-    Matrix3x3 referencePressure = identityMatrix<real, 3, 3>();
+    const Matrix3x3 referencePressure = identityMatrix<real, 3, 3>();
     fillLegacyMatrix(referencePressure, options.ref_p);
 
     std::vector<PressureCouplingOptions> optionsVector;
@@ -442,7 +454,7 @@ INSTANTIATE_TEST_SUITE_P(Cubic,
                                  Values(BoxShape::Cubic),
                                  ValuesIn(c_boxVectors[BoxShape::Cubic]),
                                  ValuesIn(c_boxVelocities[BoxShape::Cubic])),
-                         nameOfTest);
+                         sc_testNamer);
 
 INSTANTIATE_TEST_SUITE_P(Rectilinear,
                          ParrRahmTest,
@@ -451,7 +463,7 @@ INSTANTIATE_TEST_SUITE_P(Rectilinear,
                                  Values(BoxShape::Rectilinear),
                                  ValuesIn(c_boxVectors[BoxShape::Rectilinear]),
                                  ValuesIn(c_boxVelocities[BoxShape::Rectilinear])),
-                         nameOfTest);
+                         sc_testNamer);
 
 INSTANTIATE_TEST_SUITE_P(RhombDodecXYSquare,
                          ParrRahmTest,
@@ -460,7 +472,7 @@ INSTANTIATE_TEST_SUITE_P(RhombDodecXYSquare,
                                  Values(BoxShape::RhombicDodecahedronXYSquare),
                                  ValuesIn(c_boxVectors[BoxShape::RhombicDodecahedronXYSquare]),
                                  ValuesIn(c_boxVelocities[BoxShape::RhombicDodecahedronXYSquare])),
-                         nameOfTest);
+                         sc_testNamer);
 
 INSTANTIATE_TEST_SUITE_P(RhombDodecXYHex,
                          ParrRahmTest,
@@ -469,7 +481,7 @@ INSTANTIATE_TEST_SUITE_P(RhombDodecXYHex,
                                  Values(BoxShape::RhombicDodecahedronXYHexagon),
                                  ValuesIn(c_boxVectors[BoxShape::RhombicDodecahedronXYHexagon]),
                                  ValuesIn(c_boxVelocities[BoxShape::RhombicDodecahedronXYHexagon])),
-                         nameOfTest);
+                         sc_testNamer);
 
 INSTANTIATE_TEST_SUITE_P(TruncOct,
                          ParrRahmTest,
@@ -478,7 +490,7 @@ INSTANTIATE_TEST_SUITE_P(TruncOct,
                                  Values(BoxShape::TruncatedOctahedron),
                                  ValuesIn(c_boxVectors[BoxShape::TruncatedOctahedron]),
                                  ValuesIn(c_boxVelocities[BoxShape::TruncatedOctahedron])),
-                         nameOfTest);
+                         sc_testNamer);
 
 INSTANTIATE_TEST_SUITE_P(Other,
                          ParrRahmTest,
@@ -487,7 +499,7 @@ INSTANTIATE_TEST_SUITE_P(Other,
                                  Values(BoxShape::Other),
                                  ValuesIn(c_boxVectors[BoxShape::Other]),
                                  ValuesIn(c_boxVelocities[BoxShape::Other])),
-                         nameOfTest);
+                         sc_testNamer);
 
 } // namespace
 } // namespace test

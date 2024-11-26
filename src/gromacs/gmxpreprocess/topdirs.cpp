@@ -39,12 +39,18 @@
 #include <cstdio>
 
 #include <algorithm>
+#include <filesystem>
+#include <optional>
+#include <string>
 
 #include "gromacs/topology/idef.h"
+#include "gromacs/topology/ifunc.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/smalloc.h"
+#include "gromacs/utility/stringcompare.h"
 #include "gromacs/utility/stringtoenumvalueconverter.h"
 
 const char* enumValueToString(Directive d)
@@ -262,7 +268,7 @@ static const char* enumValueToString(DeprecatedDirectives d)
     return directiveNames[d];
 }
 
-Directive str2dir(char* dstr)
+Directive str2dir(const char* dstr)
 {
     static const gmx::StringToEnumValueConverter<Directive, enumValueToString, gmx::StringCompareType::CaseAndDashInsensitive> s_converter;
 

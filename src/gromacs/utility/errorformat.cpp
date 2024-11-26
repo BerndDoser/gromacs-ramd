@@ -46,6 +46,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include <string>
+
 #include "gromacs/utility/basenetwork.h"
 #include "gromacs/utility/baseversion.h"
 #include "gromacs/utility/path.h"
@@ -63,13 +65,14 @@ void printFatalErrorHeader(FILE* fp, const char* title, const char* func, const 
 {
     // In case ProgramInfo is not initialized and there is an issue with the
     // initialization, fall back to "GROMACS".
-    const char* programName = "GROMACS";
+    const char* programName;
     try
     {
         programName = getProgramContext().displayName();
     }
     catch (const std::exception&)
     {
+        programName = "GROMACS";
     }
 
     std::fprintf(fp, "\n-------------------------------------------------------\n");

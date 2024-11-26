@@ -48,25 +48,37 @@
 
 #include <algorithm>
 #include <memory>
+#include <tuple>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
 #include "gromacs/commandline/filenm.h"
 #include "gromacs/commandline/pargs.h"
+#include "gromacs/compat/pointers.h"
 #include "gromacs/gmxlib/network.h"
 #include "gromacs/hardware/detecthardware.h"
 #include "gromacs/hardware/hw_info.h"
 #include "gromacs/mdlib/stophandler.h"
+#include "gromacs/mdrun/legacymdrunoptions.h"
+#include "gromacs/mdrun/mdmodules.h"
 #include "gromacs/mdrun/runner.h"
+#include "gromacs/mdrun/simulationcontext.h"
+#include "gromacs/mdrun/simulationinputhandle.h"
 #include "gromacs/mdrunutility/handlerestart.h"
 #include "gromacs/mdrunutility/logging.h"
 #include "gromacs/mdrunutility/multisim.h"
+#include "gromacs/mdtypes/mdrunoptions.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/arraysize.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/basenetwork.h"
 #include "gromacs/utility/fatalerror.h"
+#include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/gmxmpi.h"
 #include "gromacs/utility/init.h"
 #include "gromacs/utility/physicalnodecommunicator.h"
+#include "gromacs/utility/unique_cptr.h"
 
 #include "gmxapi/exceptions.h"
 #include "gmxapi/mpi/resourceassignment.h"
@@ -286,9 +298,9 @@ std::shared_ptr<Session> ContextImpl::launch(const Workflow& work)
          */
 
         // Set input TPR name
-        if (std::any_of(mdArgs_.cbegin(), mdArgs_.cend(), [](const std::string& arg) {
-                return arg == "-s";
-            }))
+        if (std::any_of(mdArgs_.cbegin(),
+                        mdArgs_.cend(),
+                        [](const std::string& arg) { return arg == "-s"; }))
         {
             throw UsageError("gmxapi must control the simulation input, but caller provided '-s'.");
         }
@@ -296,23 +308,23 @@ std::shared_ptr<Session> ContextImpl::launch(const Workflow& work)
         mdArgs_.emplace_back(filename);
 
         // Set checkpoint file name(s) (if not already set by user).
-        if (std::none_of(mdArgs_.cbegin(), mdArgs_.cend(), [](const std::string& arg) {
-                return arg == "-cpi";
-            }))
+        if (std::none_of(mdArgs_.cbegin(),
+                         mdArgs_.cend(),
+                         [](const std::string& arg) { return arg == "-cpi"; }))
         {
             mdArgs_.emplace_back("-cpi");
             mdArgs_.emplace_back("state.cpt");
         }
-        if (std::none_of(mdArgs_.cbegin(), mdArgs_.cend(), [](const std::string& arg) {
-                return arg == "-cpo";
-            }))
+        if (std::none_of(mdArgs_.cbegin(),
+                         mdArgs_.cend(),
+                         [](const std::string& arg) { return arg == "-cpo"; }))
         {
             mdArgs_.emplace_back("-cpo");
             mdArgs_.emplace_back("state.cpt");
         }
-        if (std::none_of(mdArgs_.cbegin(), mdArgs_.cend(), [](const std::string& arg) {
-                return arg == "-o";
-            }))
+        if (std::none_of(mdArgs_.cbegin(),
+                         mdArgs_.cend(),
+                         [](const std::string& arg) { return arg == "-o"; }))
         {
             mdArgs_.emplace_back("-o");
             mdArgs_.emplace_back("traj.trr");

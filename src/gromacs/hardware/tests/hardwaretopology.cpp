@@ -44,9 +44,13 @@
 
 #include "config.h"
 
+#include <cstddef>
+
 #include <algorithm>
 #include <array>
 #include <map>
+#include <ostream>
+#include <string>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -57,6 +61,10 @@
 #include "testutils/testasserts.h"
 #include "testutils/testfilemanager.h"
 
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
@@ -235,3 +243,5 @@ TEST(HardwareTopologyTest, NumaCacheSelfconsistency)
 }
 
 } // namespace
+} // namespace test
+} // namespace gmx

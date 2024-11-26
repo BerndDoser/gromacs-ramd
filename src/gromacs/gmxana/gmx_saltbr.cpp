@@ -34,21 +34,35 @@
 #include "gmxpre.h"
 
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
+
+#include <filesystem>
+#include <string>
 
 #include "gromacs/commandline/filenm.h"
 #include "gromacs/commandline/pargs.h"
+#include "gromacs/fileio/filetypes.h"
+#include "gromacs/fileio/oenv.h"
 #include "gromacs/fileio/trxio.h"
 #include "gromacs/fileio/xvgr.h"
 #include "gromacs/gmxana/gmx_ana.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/pbcutil/pbc.h"
+#include "gromacs/topology/atoms.h"
 #include "gromacs/topology/topology.h"
 #include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/arraysize.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/cstringutil.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/stringutil.h"
+
+enum class PbcType : int;
+struct gmx_output_env_t;
 
 typedef struct
 {
@@ -109,15 +123,15 @@ int gmx_saltbr(int argc, char* argv[])
     static gmx_bool bSep     = FALSE;
     static real     truncate = 1000.0;
     t_pargs         pa[]     = { { "-t",
-                       FALSE,
-                       etREAL,
-                       { &truncate },
-                       "Groups that are never closer than this distance are not plotted" },
-                     { "-sep",
-                       FALSE,
-                       etBOOL,
-                       { &bSep },
-                       "Use separate files for each interaction (may be MANY)" } };
+                                   FALSE,
+                                   etREAL,
+                                   { &truncate },
+                                   "Groups that are never closer than this distance are not plotted" },
+                                 { "-sep",
+                                   FALSE,
+                                   etBOOL,
+                                   { &bSep },
+                                   "Use separate files for each interaction (may be MANY)" } };
     t_filenm        fnm[]    = {
         { efTRX, "-f", nullptr, ffREAD },
         { efTPR, nullptr, nullptr, ffREAD },

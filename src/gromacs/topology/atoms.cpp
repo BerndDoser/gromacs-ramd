@@ -39,17 +39,25 @@
 #include <cstring>
 
 #include <algorithm>
+#include <array>
+#include <optional>
+#include <string>
 #include <type_traits>
 
 #include "gromacs/topology/atomprop.h"
 #include "gromacs/topology/symtab.h"
+#include "gromacs/topology/topology_enums.h"
 #include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/compare.h"
 #include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/fatalerror.h"
+#include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/iserializer.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
+#include "gromacs/utility/stringutil.h"
 #include "gromacs/utility/txtdump.h"
 
 const char* enumValueToString(ParticleType enumValue)
@@ -516,7 +524,7 @@ static void comparePdbinfo(FILE*            fp,
     cmp_str(fp, "atomnm", pdb, pdb1.atomnm, pdb2.atomnm);
     cmp_real(fp, "occup", pdb, pdb1.occup, pdb2.occup, relativeTolerance, absoluteTolerance);
     cmp_real(fp, "bfac", pdb, pdb1.bfac, pdb2.bfac, relativeTolerance, absoluteTolerance);
-    cmp_bool(fp, "bAnistropic", pdb, pdb1.bAnisotropic, pdb2.bAnisotropic);
+    cmp_bool(fp, "bAnisotropic", pdb, pdb1.bAnisotropic, pdb2.bAnisotropic);
     for (int i = 0; i < 6; i++)
     {
         std::string buf = gmx::formatString("uij[%d]", i);

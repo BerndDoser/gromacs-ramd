@@ -41,13 +41,22 @@
 
 #include "gromacs/fileio/matio.h"
 
+#include <cstdio>
+
+#include <array>
 #include <filesystem>
+#include <string>
 #include <vector>
 
 #include <gtest/gtest.h>
 
+#include "gromacs/fileio/rgb.h"
+#include "gromacs/math/multidimarray.h"
+#include "gromacs/mdspan/extents.h"
 #include "gromacs/mdspan/mdspan.h"
 #include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/basedefinitions.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/stringstream.h"
 #include "gromacs/utility/stringutil.h"
@@ -68,7 +77,7 @@ std::string generateStdReferenceFile(gmx::ArrayRef<const t_mapping> refMaps)
 {
 
     const std::string format       = "%c%c  %20s  %10g  %10g  %10g\n";
-    std::string       fileContents = formatString("%ld\n", refMaps.ssize());
+    std::string       fileContents = formatString("%td\n", refMaps.ssize());
     for (const auto& map : refMaps)
     {
         fileContents.append(formatString(format.c_str(),

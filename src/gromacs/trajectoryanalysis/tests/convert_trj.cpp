@@ -42,7 +42,11 @@
 
 #include "gromacs/trajectoryanalysis/modules/convert_trj.h"
 
+#include <string>
+
 #include <gtest/gtest.h>
+
+#include "gromacs/utility/arrayref.h"
 
 #include "testutils/cmdlinetest.h"
 #include "testutils/filematchers.h"
@@ -50,6 +54,10 @@
 
 #include "moduletest.h"
 
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
@@ -105,3 +113,5 @@ TEST_F(ConvertTrjModuleTest, WorksWithAtomsAndSelection)
 }
 
 } // namespace
+} // namespace test
+} // namespace gmx

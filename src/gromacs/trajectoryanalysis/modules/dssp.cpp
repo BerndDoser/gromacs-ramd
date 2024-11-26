@@ -45,28 +45,47 @@
 
 #include "dssp.h"
 
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+
 #include <algorithm>
 #include <bitset>
+#include <filesystem>
 #include <fstream>
+#include <initializer_list>
 #include <iostream>
+#include <memory>
 #include <set>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "gromacs/analysisdata/analysisdata.h"
 #include "gromacs/analysisdata/modules/plot.h"
 #include "gromacs/fileio/gmxfio.h"
 #include "gromacs/math/units.h"
+#include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/options/basicoptions.h"
 #include "gromacs/options/filenameoption.h"
 #include "gromacs/options/ioptionscontainer.h"
+#include "gromacs/options/optionfiletype.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/selection/nbsearch.h"
+#include "gromacs/selection/selection.h"
 #include "gromacs/selection/selectionoption.h"
+#include "gromacs/topology/atoms.h"
 #include "gromacs/trajectory/trajectoryframe.h"
 #include "gromacs/trajectoryanalysis/analysissettings.h"
 #include "gromacs/trajectoryanalysis/topologyinformation.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/exceptions.h"
+#include "gromacs/utility/futil.h"
 #include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/pleasecite.h"
+#include "gromacs/utility/real.h"
 
 namespace gmx
 {
@@ -636,7 +655,8 @@ void SecondaryStructures::analyseTopology(const TopologyInformation& top,
     }
     if (clearStructure)
     {
-        auto isCorrupted = [](const ResInfo& Res) -> bool {
+        auto isCorrupted = [](const ResInfo& Res) -> bool
+        {
             return !Res.hasIndex(BackboneAtomTypes::AtomCA) || !Res.hasIndex(BackboneAtomTypes::AtomC)
                    || !Res.hasIndex(BackboneAtomTypes::AtomO) || !Res.hasIndex(BackboneAtomTypes::AtomN)
                    || !Res.hasIndex(BackboneAtomTypes::AtomH);
@@ -1687,7 +1707,7 @@ void Dssp::analyzeFrame(int frnr, const t_trxframe& fr, t_pbc* pbc, TrajectoryAn
 void Dssp::finishAnalysis(int /*nframes*/)
 {
     please_cite(stdout, "Kabsch1983");
-    please_cite(stdout, "Gorelov2024");
+    please_cite(stdout, "Gorelov2024a");
 }
 
 void Dssp::writeOutput()

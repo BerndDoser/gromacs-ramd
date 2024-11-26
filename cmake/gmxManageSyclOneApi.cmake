@@ -41,12 +41,9 @@ if(NOT GMX_GPU_SYCL OR GMX_SYCL_ACPP OR NOT GMX_SYCL_DPCPP)
 endif()
 
 if(WIN32)
-    if(CMAKE_VERSION VERSION_LESS "3.23.0")
-        message(FATAL_ERROR "SYCL with DPC++ on Windows requires cmake 3.23 or later.")
-    endif()
     if(NOT BUILD_SHARED_LIBS)
         message(FATAL_ERROR "SYCL with DPC++ on Windows doesn't work with static libraries. Set BUILD_SHARED_LIBS=on.")
-        # Tested up to 3.23.1 and icx 2022.1. Problem is order of exe link argument order. Works if gromacs.lib
+        # Tested up to cmake 3.23.1 and icx 2022.1. Problem is order of exe link argument order. Works if gromacs.lib
         # and -fsycl both appear before -link. Not possible to change order from cmake script. cmake fix is WIP.
     endif()
 endif()
@@ -57,8 +54,7 @@ if(CMAKE_CXX_COMPILER MATCHES "dpcpp$")
     message(FATAL_ERROR "Intel's \"dpcpp\" compiler is not supported; please use \"icpx\" for SYCL builds")
 endif()
 
-# Find the flags to enable (or re-enable) SYCL with Intel extensions. In case we turned it off above,
-# it's important that we check the combination of both flags, to make sure the second one re-enables SYCL.
+# Find the flags to enable SYCL with Intel compiler.
 if(NOT CHECK_SYCL_CXX_FLAGS_QUIETLY)
     message(STATUS "Checking for flags to enable SYCL")
 endif()
@@ -71,32 +67,94 @@ set(SAMPLE_SYCL_SOURCE
 set(SYCL_CXX_FLAGS "-fsycl")
 gmx_check_source_compiles_with_flags(
     "${SAMPLE_SYCL_SOURCE}"
-    "${SYCL_TOOLCHAIN_CXX_FLAGS} ${SYCL_CXX_FLAGS}"
+    "${SYCL_CXX_FLAGS}"
     "CXX"
     SYCL_CXX_FLAGS_RESULT
 )
 if (SYCL_CXX_FLAGS_RESULT)
     if(NOT CHECK_SYCL_CXX_FLAGS_QUIETLY)
-        message(STATUS "Checking for flags to enable SYCL - ${SYCL_TOOLCHAIN_CXX_FLAGS} ${SYCL_CXX_FLAGS}")
+        message(STATUS "Checking for flags to enable SYCL - ${SYCL_CXX_FLAGS}")
     endif()
     set(CHECK_SYCL_CXX_FLAGS_QUIETLY 1 CACHE INTERNAL "Keep quiet on future calls to detect SYCL flags" FORCE)
-    set(SYCL_TOOLCHAIN_CXX_FLAGS "${SYCL_TOOLCHAIN_CXX_FLAGS} ${SYCL_CXX_FLAGS}")
-    set(SYCL_TOOLCHAIN_LINKER_FLAGS "${SYCL_TOOLCHAIN_LINKER_FLAGS} ${SYCL_CXX_FLAGS}")
+    set(SYCL_TOOLCHAIN_CXX_FLAGS ${SYCL_CXX_FLAGS})
+    set(SYCL_TOOLCHAIN_LINKER_FLAGS ${SYCL_CXX_FLAGS})
 else()
-    message(FATAL_ERROR "Cannot compile a SYCL program with ${SYCL_TOOLCHAIN_CXX_FLAGS} ${SYCL_CXX_FLAGS}. Try a different compiler or disable SYCL.")
+    message(FATAL_ERROR "Cannot compile a SYCL program with ${SYCL_CXX_FLAGS}. Try a different compiler or disable SYCL.")
 endif()
+
+# Try compiling an empty kernel to sniff out the enabled targets
+set(SAMPLE_SYCL_KERNEL_PROBE_SOURCE
+"#include <sycl/sycl.hpp>
+int main()
+{
+    sycl::queue q;
+    q.parallel_for<class K>(sycl::range<1>{ 16 }, [=](sycl::id<1> itemIdx) {
+#if defined(__SYCL_DEVICE_ONLY__) && defined(__NVPTX__)
+#    warning GMX_DPCPP_TEST_HAVE_CUDA_TARGET
+#endif
+#if defined(__SYCL_DEVICE_ONLY__) && defined(__AMDGCN__)
+#    warning GMX_DPCPP_TEST_HAVE_HIP_TARGET
+#    if __AMDGCN_WAVEFRONT_SIZE == 64
+#        warning GMX_DPCPP_TEST_HAVE_HIP_WAVE64_TARGET
+#    elif __AMDGCN_WAVEFRONT_SIZE == 32
+#        warning GMX_DPCPP_TEST_HAVE_HIP_WAVE32_TARGET
+#    endif
+#endif
+#if defined(__SYCL_DEVICE_ONLY__) && (defined(__SPIR__) || defined(__SPIRV__))
+#    warning GMX_DPCPP_TEST_HAVE_INTEL_TARGET
+#endif
+    });
+    return 0;
+}"
+)
+set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+try_compile(
+    SYCL_KERNEL_COMPILATION_WORKS
+    SOURCES_TYPE NORMAL
+    SOURCE_FROM_VAR "sample_sycl_kernel_probe.cpp" SAMPLE_SYCL_KERNEL_PROBE_SOURCE
+    COMPILE_DEFINITIONS "${SYCL_TOOLCHAIN_CXX_FLAGS};${SYCL_CXX_FLAGS_EXTRA}"
+    OUTPUT_VARIABLE SYCL_KERNEL_COMPILATION_LOG
+)
+unset(CMAKE_TRY_COMPILE_TARGET_TYPE)
+if (SYCL_KERNEL_COMPILATION_WORKS)
+    foreach (target IN ITEMS CUDA HIP HIP_WAVE32 HIP_WAVE64 INTEL)
+        if(SYCL_KERNEL_COMPILATION_LOG MATCHES "GMX_DPCPP_TEST_HAVE_${target}_TARGET")
+            set(GMX_DPCPP_HAVE_${target}_TARGET ON CACHE INTERNAL "")
+        else()
+            set(GMX_DPCPP_HAVE_${target}_TARGET OFF CACHE INTERNAL "")
+        endif()
+        if (NOT GMX_DPCPP_TARGET_STATUS_REPORTED)
+            message(STATUS "oneAPI DPC++ has ${target} target enabled: ${GMX_DPCPP_HAVE_${target}_TARGET}")
+        endif()
+    endforeach()
+    set(GMX_DPCPP_TARGET_STATUS_REPORTED TRUE CACHE INTERNAL "")
+    list(APPEND SYCL_TOOLCHAIN_CXX_FLAGS ${SYCL_CXX_FLAGS_EXTRA})
+    list(APPEND SYCL_TOOLCHAIN_LINKER_FLAGS ${SYCL_CXX_FLAGS_EXTRA})
+else()
+    message(FATAL_ERROR "Cannot compile sample SYCL kernel code:\n${SYCL_KERNEL_COMPILATION_LOG}")
+endif()
+
+if(NOT GMX_DPCPP_HAVE_CUDA_TARGET AND NOT GMX_DPCPP_HAVE_HIP_TARGET AND NOT GMX_DPCPP_HAVE_INTEL_TARGET)
+    message(WARNING "SYCL oneAPI has no known GPU targets enabled!")
+endif()
+if(GMX_DPCPP_HAVE_HIP_TARGET AND NOT GMX_DPCPP_HAVE_HIP_WAVE32_TARGET AND NOT GMX_DPCPP_HAVE_HIP_WAVE64_TARGET)
+    message(FATAL_ERROR "SYCL oneAPI detected the use of HIP target, but cannot determine wave size")
+endif()
+
+list(APPEND SYCL_TOOLCHAIN_CXX_FLAGS ${SYCL_CXX_FLAGS_EXTRA})
+list(APPEND SYCL_TOOLCHAIN_LINKER_FLAGS ${SYCL_CXX_FLAGS_EXTRA})
 
 # Add kernel-splitting flag if available, both for compiling and linking
 set(SYCL_DEVICE_CODE_SPLIT_CXX_FLAGS "-fsycl-device-code-split=per_kernel")
 gmx_check_source_compiles_with_flags(
     "${SAMPLE_SYCL_SOURCE}"
-    "${SYCL_TOOLCHAIN_CXX_FLAGS} ${SYCL_DEVICE_CODE_SPLIT_CXX_FLAGS}"
+    "${SYCL_TOOLCHAIN_CXX_FLAGS};${SYCL_DEVICE_CODE_SPLIT_CXX_FLAGS}"
     "CXX"
     SYCL_DEVICE_CODE_SPLIT_CXX_FLAGS_RESULT
 )
 if (SYCL_DEVICE_CODE_SPLIT_CXX_FLAGS_RESULT)
-    set(SYCL_TOOLCHAIN_CXX_FLAGS "${SYCL_TOOLCHAIN_CXX_FLAGS} ${SYCL_DEVICE_CODE_SPLIT_CXX_FLAGS}")
-    set(SYCL_TOOLCHAIN_LINKER_FLAGS "${SYCL_TOOLCHAIN_LINKER_FLAGS} ${SYCL_DEVICE_CODE_SPLIT_CXX_FLAGS}")
+    list(APPEND SYCL_TOOLCHAIN_CXX_FLAGS ${SYCL_DEVICE_CODE_SPLIT_CXX_FLAGS})
+    list(APPEND SYCL_TOOLCHAIN_LINKER_FLAGS ${SYCL_DEVICE_CODE_SPLIT_CXX_FLAGS})
 else()
     message(WARNING "Cannot compile SYCL with per-kernel device-code splitting. Simulations will work, but the first step will be much slower than it needs to be. Try a different compiler.")
 endif()
@@ -110,7 +168,7 @@ gmx_find_flag_for_source(
     SYCL_FAST_MATH_CXX_FLAGS
     "-ffast-math" "/clang:-ffast-math")
 if (SYCL_FAST_MATH_CXX_FLAGS_RESULT)
-    set(SYCL_TOOLCHAIN_CXX_FLAGS "${SYCL_TOOLCHAIN_CXX_FLAGS} ${SYCL_FAST_MATH_CXX_FLAGS}")
+    list(APPEND SYCL_TOOLCHAIN_CXX_FLAGS ${SYCL_FAST_MATH_CXX_FLAGS})
 endif()
 
 # We compile PME kernels for all possible sub-group sizes, so the warning is useless.
@@ -121,31 +179,41 @@ gmx_check_compiler_flag(
     HAVE_W_NO_INCORRECT_SUB_GROUP_SIZE_RESULT
 )
 if (HAVE_W_NO_INCORRECT_SUB_GROUP_SIZE_RESULT)
-    set(SYCL_TOOLCHAIN_CXX_FLAGS "${SYCL_TOOLCHAIN_CXX_FLAGS} -Wno-incorrect-sub-group-size")
+    list(APPEND SYCL_TOOLCHAIN_CXX_FLAGS "-Wno-incorrect-sub-group-size")
 endif()
 
-if("${SYCL_CXX_FLAGS_EXTRA}" MATCHES "fsycl-targets=.*(nvptx64|amdgcn|amd_gpu|nvidia_gpu)")
+# Force small GRF size on PVC, see #5105
+gmx_check_compiler_flag(
+    "-ftarget-register-alloc-mode=pvc:small"
+    "CXX"
+    HAVE_TARGET_REGISTER_ALLOC_MODE_FLAG
+)
+if (HAVE_TARGET_REGISTER_ALLOC_MODE_FLAG)
+    list(APPEND SYCL_TOOLCHAIN_LINKER_FLAGS "-ftarget-register-alloc-mode=pvc:small")
+endif()
+
+if(GMX_DPCPP_HAVE_CUDA_TARGET OR GMX_DPCPP_HAVE_HIP_TARGET)
     # When compiling for NVIDIA/AMD, Intel LLVM produces tons of harmless warnings, ignore them
-    set(SYCL_WARNINGS_CXX_FLAGS "-Wno-linker-warnings -Wno-override-module -Wno-sycl-target")
+    set(SYCL_WARNINGS_CXX_FLAGS "-Wno-linker-warnings;-Wno-override-module;-Wno-sycl-target")
     gmx_check_source_compiles_with_flags(
         "${SAMPLE_SYCL_SOURCE}"
-        "${SYCL_TOOLCHAIN_CXX_FLAGS} ${SYCL_WARNINGS_CXX_FLAGS}"
+        "${SYCL_TOOLCHAIN_CXX_FLAGS};${SYCL_WARNINGS_CXX_FLAGS}"
         "CXX"
         SYCL_WARNINGS_CXX_FLAGS_RESULT
     )
     if (SYCL_WARNINGS_CXX_FLAGS_RESULT)
-        set(SYCL_TOOLCHAIN_CXX_FLAGS "${SYCL_TOOLCHAIN_CXX_FLAGS} ${SYCL_WARNINGS_CXX_FLAGS}")
-        set(SYCL_TOOLCHAIN_LINKER_FLAGS "${SYCL_TOOLCHAIN_LINKER_FLAGS} ${SYCL_WARNINGS_CXX_FLAGS}")
+        list(APPEND SYCL_TOOLCHAIN_CXX_FLAGS ${SYCL_WARNINGS_CXX_FLAGS})
+        list(APPEND SYCL_TOOLCHAIN_LINKER_FLAGS ${SYCL_WARNINGS_CXX_FLAGS})
     endif()
 
-    # Set GMX_GPU_NB_DISABLE_CLUSTER_PAIR_SPLIT when targetting only devices with 64-wide execution
+    # Set GMX_GPU_NB_DISABLE_CLUSTER_PAIR_SPLIT when targeting only devices with 64-wide execution
     set(_have_subgroup_not_64 OFF)
     set(_have_subgroup_64 OFF)
-    if ("${SYCL_CXX_FLAGS_EXTRA}" MATCHES "gfx1[0-9][0-9][0-9]|nvptx64|nvidia_gpu|spir64")
+    if (GMX_DPCPP_HAVE_CUDA_TARGET OR GMX_DPCPP_HAVE_INTEL_TARGET OR GMX_DPCPP_HAVE_HIP_WAVE32_TARGET)
         set(_have_subgroup_not_64 ON) # We have AMD RDNA, NVIDIA, or Intel target(s)
     endif()
     # We assume that any GCN2-5 architecture (gfx7/8) and CDNA1-3 (gfx9 series) up until the time of writing of this conditional is 64-wide
-    if ("${SYCL_CXX_FLAGS_EXTRA}" MATCHES "gfx[7-8][0-9][0-9]|gfx9[0-4][0-9ac]")
+    if (GMX_DPCPP_HAVE_HIP_WAVE64_TARGET)
         set(_have_subgroup_64 ON) # We have AMD GCN/CDNA target(s)
     endif()
     if (_have_subgroup_64 AND NOT _have_subgroup_not_64)
@@ -154,6 +222,32 @@ if("${SYCL_CXX_FLAGS_EXTRA}" MATCHES "fsycl-targets=.*(nvptx64|amdgcn|amd_gpu|nv
             ON)
         mark_as_advanced(GMX_GPU_NB_DISABLE_CLUSTER_PAIR_SPLIT)
     endif()
+endif()
+
+# The API is experimental and unstable, so we don't build it by default
+option(GMX_SYCL_ENABLE_GRAPHS "Enable support for SYCL Graphs (experimental oneAPI feature)")
+mark_as_advanced(GMX_SYCL_ENABLE_GRAPHS)
+
+if(GMX_SYCL_ENABLE_GRAPHS)
+    if(GMX_INTEL_LLVM AND GMX_INTEL_LLVM_VERSION LESS_EQUAL 20240002)
+        message(FATAL_ERROR "SYCL Graph support in oneAPI 2024.0.2 is advertised but not sufficient")
+    endif()
+    set(CMAKE_REQUIRED_FLAGS "${SYCL_TOOLCHAIN_CXX_FLAGS}")
+    check_cxx_symbol_exists(SYCL_EXT_ONEAPI_GRAPH "sycl/sycl.hpp" HAVE_SYCL_EXT_ONEAPI_GRAPH)
+    # Check if we have an aspect denoting partial support for graphs.
+    # It is a temporary measure introduced in the open-source IntelLLVM around oneAPI 2024.3
+    # to denote LevelZero devices supporting all graph features except for update,
+    # with the intention to remove it in the future.
+    check_cxx_source_compiles("#include <sycl/sycl.hpp>\n int main(){ auto a = sycl::aspect::ext_oneapi_limited_graph; }"
+        HAVE_SYCL_ASPECT_EXT_ONEAPI_LIMITED_GRAPH)
+    unset(CMAKE_REQUIRED_FLAGS)
+    if(HAVE_SYCL_EXT_ONEAPI_GRAPH)
+        set(GMX_HAVE_GPU_GRAPH_SUPPORT ON)
+    else()
+        message(FATAL_ERROR "SYCL Graph support requested, but SYCL_EXT_ONEAPI_GRAPH extension is not available")
+    endif()
+else()
+    set(GMX_HAVE_GPU_GRAPH_SUPPORT OFF)
 endif()
 
 if(GMX_GPU_FFT_VKFFT)
@@ -206,12 +300,6 @@ if(GMX_GPU_FFT_BBFFT)
     endif()
     set(_sycl_has_valid_fft TRUE)
 endif()
-
-# convert the space-separated strings to lists
-separate_arguments(SYCL_TOOLCHAIN_CXX_FLAGS)
-list(APPEND SYCL_TOOLCHAIN_CXX_FLAGS ${SYCL_CXX_FLAGS_EXTRA})
-separate_arguments(SYCL_TOOLCHAIN_LINKER_FLAGS)
-list(APPEND SYCL_TOOLCHAIN_LINKER_FLAGS ${SYCL_CXX_FLAGS_EXTRA})
 
 # We disable warnings about functions deprecated in SYCL2020, because
 # sometimes there is no widely-supported alternative.

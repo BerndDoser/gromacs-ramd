@@ -84,17 +84,17 @@ const char* getGpuImplementationString()
         }
         else if (GMX_GPU_HIP)
         {
-            return "HIP (not implemented yet}";
+            return "HIP";
         }
         else if (GMX_GPU_SYCL)
         {
             if (GMX_SYCL_DPCPP)
             {
-                return "SYCL (DPCPP)";
+                return "SYCL (oneAPI DPC++)";
             }
-            else if (GMX_SYCL_HIPSYCL)
+            else if (GMX_SYCL_ACPP)
             {
-                return "SYCL (hipSYCL)";
+                return "SYCL (AdaptiveCpp)";
             }
             else
             {

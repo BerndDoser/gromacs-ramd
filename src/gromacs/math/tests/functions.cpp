@@ -49,15 +49,24 @@
 #include "gromacs/math/functions.h"
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 
+#include <initializer_list>
+#include <limits>
 #include <random>
+#include <string>
+#include <vector>
 
 #include <gtest/gtest.h>
 
 #include "testutils/refdata.h"
 #include "testutils/testasserts.h"
 
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
@@ -449,3 +458,5 @@ TYPED_TEST(FunctionTestIntegerTypes, DivideRoundUp)
 }
 
 } // namespace
+} // namespace test
+} // namespace gmx

@@ -42,11 +42,22 @@
 
 #include "gromacs/gmxpreprocess/genconf.h"
 
+#include <filesystem>
+#include <string>
+
+#include <gtest/gtest.h>
+
+#include "gromacs/utility/arrayref.h"
+
 #include "testutils/cmdlinetest.h"
 #include "testutils/refdata.h"
 #include "testutils/testfilemanager.h"
 #include "testutils/textblockmatchers.h"
 
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
@@ -104,3 +115,5 @@ TEST_F(GenconfTest, nbox_rot_Works)
 }
 
 } // namespace
+} // namespace test
+} // namespace gmx

@@ -38,33 +38,50 @@
 #include "config.h"
 
 #include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 
 #include <algorithm>
+#include <filesystem>
+#include <memory>
+#include <string>
+#include <vector>
 
+#include "gromacs/commandline/filenm.h"
 #include "gromacs/commandline/pargs.h"
 #include "gromacs/ewald/ewald_utils.h"
 #include "gromacs/ewald/pme.h"
 #include "gromacs/fft/calcgrid.h"
 #include "gromacs/fileio/checkpoint.h"
+#include "gromacs/fileio/filetypes.h"
 #include "gromacs/fileio/tpxio.h"
 #include "gromacs/gmxlib/network.h"
 #include "gromacs/math/functions.h"
 #include "gromacs/math/units.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/mdlib/broadcaststructs.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/mdtypes/state.h"
+#include "gromacs/random/seed.h"
 #include "gromacs/random/threefry.h"
 #include "gromacs/random/uniformintdistribution.h"
+#include "gromacs/topology/atoms.h"
 #include "gromacs/topology/mtop_atomloops.h"
 #include "gromacs/topology/mtop_util.h"
 #include "gromacs/topology/topology.h"
 #include "gromacs/utility/arraysize.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/fatalerror.h"
+#include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/pleasecite.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
+
+struct gmx_output_env_t;
 
 /* #define TAKETIME */
 /* #define DEBUG  */
@@ -411,7 +428,7 @@ static void calc_recipbox(matrix box, matrix recipbox)
 static real estimate_reciprocal(PmeErrorInputs* info,
                                 rvec            x[], /* array of particles */
                                 const real      q[], /* array of charges */
-                                int  nr, /* number of charges = size of the charge array */
+                                int nr, /* number of charges = size of the charge array */
                                 FILE gmx_unused* fp_out,
                                 gmx_bool         bVerbose,
                                 int  seed,     /* The seed for the random number generator */
@@ -933,6 +950,9 @@ static void estimate_PME_error(PmeErrorInputs*   info,
                             * self-energy error term */
     int i = 0;
 
+    // Help humans and analyzers understand that the main rank has
+    // a valid pointer
+    GMX_RELEASE_ASSERT((MAIN(cr)) == (fp_out != nullptr), "Inconsistent file pointer");
     if (MAIN(cr))
     {
         fprintf(fp_out, "\n--- PME ERROR ESTIMATE ---\n");
@@ -972,6 +992,9 @@ static void estimate_PME_error(PmeErrorInputs*   info,
         bcast_info(info, cr);
     }
 
+    // Help humans and analyzers understand that the main rank has
+    // a valid pointer
+    GMX_RELEASE_ASSERT((MAIN(cr)) == (fp_out != nullptr), "Inconsistent file pointer");
     if (MAIN(cr))
     {
         fprintf(fp_out, "Direct space error est. : %10.3e kJ/(mol*nm)\n", info->e_dir[0]);
@@ -1211,6 +1234,9 @@ int gmx_pme_error(int argc, char* argv[])
             ir.ewald_rtol = info.ewald_rtol[0];
             write_tpx_state(opt2fn("-so", NFILE, fnm), &ir, &state, mtop);
         }
+    }
+    if (fp)
+    {
         please_cite(fp, "Wang2010");
         fclose(fp);
     }

@@ -44,16 +44,16 @@
 #ifndef GMX_NBNXM_BOUNDINGBOX_SIMD_H
 #define GMX_NBNXM_BOUNDINGBOX_SIMD_H
 
+#include "config.h"
+
 #include "gromacs/math/vec.h"
 #include "gromacs/simd/simd.h"
 
-namespace Nbnxm
+namespace gmx
 {
 
 /*! \brief The number of bounds along one dimension of a bounding box */
 static constexpr int c_numBoundingBoxBounds1D = 2;
-
-} // namespace Nbnxm
 
 #ifndef DOXYGEN
 
@@ -78,19 +78,21 @@ static constexpr int c_numBoundingBoxBounds1D = 2;
 #            define NBNXN_SEARCH_SIMD4_FLOAT_X_BB 0
 #        endif
 
-/* Store bounding boxes corners as quadruplets: xxxxyyyyzzzz
+/* Whether we store bounding boxes corners as quadruplets: xxxxyyyyzzzz
  *
- * The packed bounding box coordinate stride is always set to 4.
+ * The packed bounding box coordinate stride is always set to 4 if the number of cells is >=4.
  * With AVX we could use 8, but that turns out not to be faster.
  */
-#        define NBNXN_BBXXXX 1
+#        define NBNXN_BBXXXX                                                                                           \
+            (GMX_GPU_NB_NUM_CLUSTER_PER_CELL_X * GMX_GPU_NB_NUM_CLUSTER_PER_CELL_Y * GMX_GPU_NB_NUM_CLUSTER_PER_CELL_Z \
+             >= 4)
 
 //! The number of bounding boxes in a pack, also the size of a pack along one dimension
 static constexpr int c_packedBoundingBoxesDimSize = GMX_SIMD4_WIDTH;
 
 //! Total number of corners (floats) in a pack of bounding boxes
 static constexpr int c_packedBoundingBoxesSize =
-        c_packedBoundingBoxesDimSize * DIM * Nbnxm::c_numBoundingBoxBounds1D;
+        c_packedBoundingBoxesDimSize * DIM * c_numBoundingBoxBounds1D;
 
 //! Returns the starting index of the bounding box pack that contains the given cluster
 static constexpr int packedBoundingBoxesIndex(int clusterIndex)
@@ -106,5 +108,7 @@ static constexpr int packedBoundingBoxesIndex(int clusterIndex)
 #    endif /* NBNXN_SEARCH_BB_SIMD4 */
 
 #endif // !DOXYGEN
+
+} // namespace gmx
 
 #endif // GMX_NBNXM_BOUNDINGBOX_SIMD_H

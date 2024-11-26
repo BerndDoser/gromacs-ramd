@@ -45,8 +45,12 @@
 
 #include "kernel_common.h"
 
+#include "gromacs/gpu_utils/hostallocator.h"
 #include "gromacs/pbcutil/ishift.h"
 #include "gromacs/utility/gmxassert.h"
+
+namespace gmx
+{
 
 void clear_fshift(real* fshift)
 {
@@ -81,3 +85,5 @@ void reduce_energies_over_lists(const nbnxn_atomdata_t* nbat, int nlist, real* V
         }
     }
 }
+
+} // namespace gmx

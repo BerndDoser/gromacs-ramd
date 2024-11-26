@@ -33,11 +33,25 @@
  */
 #include "gmxpre.h"
 
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+
+#include <iterator>
+#include <memory>
+#include <string>
+#include <vector>
+
 #include <gmock/gmock-matchers.h>
+#include <gtest/gtest.h>
 
 #include "gromacs/applied_forces/awh/correlationgrid.h"
 #include "gromacs/applied_forces/awh/correlationhistory.h"
+#include "gromacs/applied_forces/awh/correlationtensor.h"
 #include "gromacs/mdtypes/awh_correlation_history.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/exceptions.h"
+#include "gromacs/utility/gmxassert.h"
 
 #include "testutils/refdata.h"
 #include "testutils/testasserts.h"
@@ -93,9 +107,9 @@ public:
         forces_(std::begin(g_forces), std::end(g_forces))
     {
         /* Set up a basic Correlation Grid. */
-        constexpr double                    blockLengthInit = 0;
+        constexpr double blockLengthInit = 0;
         CorrelationGrid::BlockLengthMeasure blockLengthMeasure = CorrelationGrid::BlockLengthMeasure::Time;
-        numDim_                                                = GetParam();
+        numDim_ = GetParam();
         GMX_RELEASE_ASSERT(numDim_ < 4, "Too high dimensionality.");
         numPoints_ = std::pow(g_numPointsPerDim, numDim_);
 

@@ -41,13 +41,19 @@
 #include "gmxpre.h"
 
 #include <cfenv>
+#include <cinttypes>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
 
 #include <algorithm>
 #include <array>
+#include <filesystem>
+#include <memory>
+#include <string>
+#include <vector>
 
 #include "gromacs/commandline/filenm.h"
 #include "gromacs/domdec/dlbtiming.h"
@@ -60,8 +66,11 @@
 #include "gromacs/gmxlib/network.h"
 #include "gromacs/gmxlib/nrnb.h"
 #include "gromacs/listed_forces/listed_forces.h"
+#include "gromacs/math/arrayrefwithpadding.h"
+#include "gromacs/math/functions.h"
 #include "gromacs/math/units.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/mdlib/constr.h"
 #include "gromacs/mdlib/dispersioncorrection.h"
 #include "gromacs/mdlib/energyoutput.h"
@@ -73,34 +82,52 @@
 #include "gromacs/mdlib/update.h"
 #include "gromacs/mdlib/vsite.h"
 #include "gromacs/mdrunutility/printtime.h"
+#include "gromacs/mdtypes/atominfo.h"
 #include "gromacs/mdtypes/commrec.h"
+#include "gromacs/mdtypes/enerdata.h"
 #include "gromacs/mdtypes/forcebuffers.h"
 #include "gromacs/mdtypes/forcerec.h"
 #include "gromacs/mdtypes/group.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/interaction_const.h"
+#include "gromacs/mdtypes/locality.h"
 #include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/mdrunoptions.h"
 #include "gromacs/mdtypes/multipletimestepping.h"
+#include "gromacs/mdtypes/simulation_workload.h"
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/nbnxm/nbnxm.h"
 #include "gromacs/pbcutil/pbc.h"
+#include "gromacs/random/seed.h"
 #include "gromacs/random/threefry.h"
 #include "gromacs/random/uniformrealdistribution.h"
 #include "gromacs/taskassignment/include/gromacs/taskassignment/decidesimulationworkload.h"
 #include "gromacs/timing/wallcycle.h"
 #include "gromacs/timing/walltime_accounting.h"
+#include "gromacs/topology/atoms.h"
+#include "gromacs/topology/forcefieldparameters.h"
+#include "gromacs/topology/idef.h"
+#include "gromacs/topology/ifunc.h"
 #include "gromacs/topology/mtop_util.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/topology/topology_enums.h"
 #include "gromacs/trajectory/trajectoryframe.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/cstringutil.h"
+#include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/logger.h"
+#include "gromacs/utility/range.h"
+#include "gromacs/utility/real.h"
+#include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/stringutil.h"
 
 #include "legacysimulator.h"
+
+struct gmx_edsam;
 
 namespace gmx
 {
@@ -299,9 +326,12 @@ namespace
 //! Returns whether there are electrostatic contributions to the insertion energy
 bool haveElectrostatics(const t_mdatoms& mdatoms, const Range<int>& testAtomsRange)
 {
-    return std::any_of(testAtomsRange.begin(), testAtomsRange.end(), [mdatoms](int i) {
-        return mdatoms.chargeA[i] != 0 || (!mdatoms.chargeB.empty() && mdatoms.chargeB[i] != 0);
-    });
+    return std::any_of(testAtomsRange.begin(),
+                       testAtomsRange.end(),
+                       [mdatoms](int i) {
+                           return mdatoms.chargeA[i] != 0
+                                  || (!mdatoms.chargeB.empty() && mdatoms.chargeB[i] != 0);
+                       });
 }
 
 } // namespace
@@ -461,7 +491,7 @@ std::pair<double, double> TestParticleInsertion::performSingleInsertion(const do
                                                                         t_state*    stateGlobal,
                                                                         MdrunScheduleWorkload* runScheduleWork,
                                                                         gmx_wallcycle* wallCycleCounters,
-                                                                        t_nrnb*        nrnb)
+                                                                        t_nrnb* nrnb)
 {
     /* Add random displacement uniformly distributed in a sphere
      * of radius rtpi. We don't need to do this is we generate
@@ -575,21 +605,6 @@ std::pair<double, double> TestParticleInsertion::performSingleInsertion(const do
     std::feclearexcept(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW);
     std::feupdateenv(&floatingPointEnvironment);
 
-    if (fr_.dispersionCorrection)
-    {
-        /* Calculate long range corrections to pressure and energy */
-        const DispersionCorrection::Correction correction =
-                fr_.dispersionCorrection->calculate(stateGlobal->box, 0);
-        /* figure out how to rearrange the next 4 lines MRS 8/4/2009 */
-        enerd_.term[F_DISPCORR] = correction.energy;
-        enerd_.term[F_EPOT] += correction.energy;
-        enerd_.term[F_PRES] += correction.pressure;
-        enerd_.term[F_DVDL] += correction.dvdl;
-    }
-    else
-    {
-        enerd_.term[F_DISPCORR] = 0;
-    }
     if (usingRF(fr_.ic->eeltype))
     {
         enerd_.term[F_EPOT] += rfExclusionEnergy_;
@@ -799,7 +814,7 @@ double TestParticleInsertion::insertIntoFrame(const double           t,
 
             /* Put the inserted molecule on it's own search grid */
             fr_.nbv->putAtomsOnGrid(
-                    box, 1, xInit, xInit, nullptr, testAtomsRange_, -1, fr_.atomInfo, x, 0, nullptr);
+                    box, 1, xInit, xInit, nullptr, testAtomsRange_, testAtomsRange_.size(), -1, fr_.atomInfo, x, nullptr);
 
             /* TODO: Avoid updating all atoms at every bNS step */
             fr_.nbv->setAtomProperties(mdatoms_.typeA, mdatoms_.chargeA, fr_.atomInfo);
@@ -1080,7 +1095,7 @@ void LegacySimulator::do_tpi()
     const InteractionDefinitions emptyInteractionDefinitions(emptyFFParams);
     for (auto& listedForces : fr_->listedForces)
     {
-        listedForces.setup(emptyInteractionDefinitions, 0, false);
+        listedForces.setup(emptyInteractionDefinitions, 0, false, mdatoms->cVCM, fr_->posresCom.size());
     }
 
     double V_all     = 0;
@@ -1160,8 +1175,17 @@ void LegacySimulator::do_tpi()
         /* Put all atoms except for the inserted ones on the grid */
         rvec vzero       = { 0, 0, 0 };
         rvec boxDiagonal = { box[XX][XX], box[YY][YY], box[ZZ][ZZ] };
-        fr_->nbv->putAtomsOnGrid(
-                box, 0, vzero, boxDiagonal, nullptr, { 0, *testAtomsRange.begin() }, -1, fr_->atomInfo, x, 0, nullptr);
+        fr_->nbv->putAtomsOnGrid(box,
+                                 0,
+                                 vzero,
+                                 boxDiagonal,
+                                 nullptr,
+                                 { 0, *testAtomsRange.begin() },
+                                 *testAtomsRange.begin(),
+                                 -1,
+                                 fr_->atomInfo,
+                                 x,
+                                 nullptr);
 
         gmx_edsam* const ed = nullptr;
 

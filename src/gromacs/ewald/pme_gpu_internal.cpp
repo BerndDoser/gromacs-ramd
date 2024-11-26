@@ -638,13 +638,15 @@ void pme_gpu_realloc_and_copy_fract_shifts(PmeGpu* pmeGpu)
                          &kernelParamsPtr->fractShiftsTableTexture,
                          pmeGpu->common->fsh.data(),
                          newFractShiftsSize,
-                         pmeGpu->archSpecific->deviceContext_);
+                         pmeGpu->archSpecific->deviceContext_,
+                         pmeGpu->archSpecific->pmeStream_);
 
     initParamLookupTable(&kernelParamsPtr->grid.d_gridlineIndicesTable,
                          &kernelParamsPtr->gridlineIndicesTableTexture,
                          pmeGpu->common->nn.data(),
                          newFractShiftsSize,
-                         pmeGpu->archSpecific->deviceContext_);
+                         pmeGpu->archSpecific->deviceContext_,
+                         pmeGpu->archSpecific->pmeStream_);
 }
 
 void pme_gpu_free_fract_shifts(const PmeGpu* pmeGpu)
@@ -1430,20 +1432,24 @@ void pme_gpu_reinit_atoms(PmeGpu* pmeGpu, const int nAtoms, const real* chargesA
     const bool haveToRealloc      = (pmeGpu->nAtomsAlloc < nAtomsNewPadded);
     pmeGpu->nAtomsAlloc           = nAtomsNewPadded;
 
-    const auto atomsPerWarp                 = pme_gpu_get_atoms_per_warp(pmeGpu);
-    const int  nWarps                       = gmx::divideRoundUp(nAtoms, atomsPerWarp);
+    const auto atomsPerWarp = pme_gpu_get_atoms_per_warp(pmeGpu);
+    const int  nWarps       = gmx::divideRoundUp(nAtoms, atomsPerWarp);
     pmeGpu->archSpecific->splineCountActive = DIM * nWarps * atomsPerWarp * pmeGpu->common->pme_order;
 
     if (pmeGpu->useNvshmem)
     {
         // find the max nAtomsAlloc among all the ranks for symmetric forces buffer allocation.
+#if GMX_MPI
         MPI_Allreduce(
                 &pmeGpu->nAtomsAlloc, &pmeGpu->nvshmemParams->nAtomsAlloc_symmetric, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+#endif
 
         int myRank     = -1;
         int numPpRanks = pmeGpu->nvshmemParams->ppRanksRef.size();
+#if GMX_MPI
         MPI_Comm_rank(MPI_COMM_WORLD, &myRank);
         MPI_Bcast(&numPpRanks, 1, MPI_INT, myRank, MPI_COMM_WORLD);
+#endif
         // symmetric buffer allocation used for synchronization purpose
         // 1 to be used to signal PME to PP rank of put, and
         // numPpRanks is intended to be used for each PP rank buffer consumption completion
@@ -1790,10 +1796,10 @@ static auto selectSpreadKernelPtr(const PmeGpu*  pmeGpu,
  *
  * \return Rank of remote sender associated with this stage
  */
-static int manageSyncWithPpCoordinateSenderGpu(const PmeGpu*                  pmeGpu,
+static int manageSyncWithPpCoordinateSenderGpu(const PmeGpu* pmeGpu,
                                                gmx::PmeCoordinateReceiverGpu* pmeCoordinateReceiverGpu,
-                                               bool                           usePipeline   = false,
-                                               int                            pipelineStage = 0)
+                                               bool usePipeline   = false,
+                                               int  pipelineStage = 0)
 {
     int senderRank;
     if (GMX_THREAD_MPI)
@@ -1801,13 +1807,18 @@ static int manageSyncWithPpCoordinateSenderGpu(const PmeGpu*                  pm
         GpuEventSynchronizer* event;
         std::tie(senderRank, event) =
                 pmeCoordinateReceiverGpu->receivePpCoordinateSendEvent(pipelineStage);
-        if (usePipeline)
+        // If a pipeline stage has no particles, no send event will be
+        // sent and senderRank will be < 0.
+        if (senderRank >= 0)
         {
-            event->enqueueWaitEvent(*(pmeCoordinateReceiverGpu->ppCommStream(senderRank)));
-        }
-        else
-        {
-            event->enqueueWaitEvent(pmeGpu->archSpecific->pmeStream_);
+            if (usePipeline)
+            {
+                event->enqueueWaitEvent(*(pmeCoordinateReceiverGpu->ppCommStream(senderRank)));
+            }
+            else
+            {
+                event->enqueueWaitEvent(pmeGpu->archSpecific->pmeStream_);
+            }
         }
     }
     else
@@ -1952,6 +1963,12 @@ void pme_gpu_spread(PmeGpu*                        pmeGpu,
                 wallcycle_start(wcycle, WallCycleCounter::WaitGpuPmePPRecvX);
                 int senderRank = manageSyncWithPpCoordinateSenderGpu(
                         pmeGpu, pmeCoordinateReceiverGpu, kernelParamsPtr->usePipeline != 0, i);
+                if (senderRank < 0)
+                {
+                    // A pipeline stage with no coordinates was reached
+                    wallcycle_stop(wcycle, WallCycleCounter::WaitGpuPmePPRecvX);
+                    continue;
+                }
                 wallcycle_stop(wcycle, WallCycleCounter::WaitGpuPmePPRecvX);
 
                 wallcycle_start(wcycle, WallCycleCounter::LaunchGpuPme);

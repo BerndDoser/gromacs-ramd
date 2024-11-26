@@ -34,12 +34,17 @@
 #include "gmxpre.h"
 
 #include <cmath>
+#include <cstdio>
 
 #include <algorithm>
+#include <filesystem>
+#include <string>
 
+#include "gromacs/commandline/filenm.h"
 #include "gromacs/commandline/pargs.h"
 #include "gromacs/commandline/viewit.h"
 #include "gromacs/correlationfunctions/autocorr.h"
+#include "gromacs/fileio/filetypes.h"
 #include "gromacs/fileio/trrio.h"
 #include "gromacs/fileio/xvgr.h"
 #include "gromacs/gmxana/angle_correction.h"
@@ -48,12 +53,17 @@
 #include "gromacs/math/functions.h"
 #include "gromacs/math/units.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/topology/index.h"
 #include "gromacs/utility/arraysize.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/pleasecite.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
+
+struct gmx_output_env_t;
 
 static void dump_dih_trr(int nframes, int nangles, real** dih, const char* fn, real* time)
 {
@@ -131,28 +141,28 @@ int gmx_g_angle(int argc, char* argv[])
     t_pargs            pa[]     = {
         { "-type", FALSE, etENUM, { opt }, "Type of angle to analyse" },
         { "-all",
-          FALSE,
-          etBOOL,
-          { &bALL },
-          "Plot all angles separately in the averages file, in the order of appearance in the "
-          "index file." },
+                         FALSE,
+                         etBOOL,
+                         { &bALL },
+                         "Plot all angles separately in the averages file, in the order of appearance in the "
+                                        "index file." },
         { "-binwidth",
-          FALSE,
-          etREAL,
-          { &binwidth },
-          "binwidth (degrees) for calculating the distribution" },
+                         FALSE,
+                         etREAL,
+                         { &binwidth },
+                         "binwidth (degrees) for calculating the distribution" },
         { "-periodic", FALSE, etBOOL, { &bPBC }, "Print dihedral angles modulo 360 degrees" },
         { "-chandler",
-          FALSE,
-          etBOOL,
-          { &bChandler },
-          "Use Chandler correlation function (N[trans] = 1, N[gauche] = 0) rather than cosine "
-          "correlation function. Trans is defined as phi < -60 or phi > 60." },
+                         FALSE,
+                         etBOOL,
+                         { &bChandler },
+                         "Use Chandler correlation function (N[trans] = 1, N[gauche] = 0) rather than cosine "
+                                        "correlation function. Trans is defined as phi < -60 or phi > 60." },
         { "-avercorr",
-          FALSE,
-          etBOOL,
-          { &bAverCorr },
-          "Average the correlation functions for the individual angles/dihedrals" }
+                         FALSE,
+                         etBOOL,
+                         { &bAverCorr },
+                         "Average the correlation functions for the individual angles/dihedrals" }
     };
     static const char* bugs[] = {
         "Counting transitions only works for dihedrals with multiplicity 3"

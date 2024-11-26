@@ -37,21 +37,32 @@
 
 #include <cstdlib>
 
+#include <string>
+#include <utility>
+#include <variant>
+#include <vector>
+
 #include <gtest/gtest.h>
 
 #include "gromacs/math/functions.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/mdlib/updategroups.h"
+#include "gromacs/topology/block.h"
+#include "gromacs/topology/forcefieldparameters.h"
 #include "gromacs/topology/idef.h"
 #include "gromacs/topology/ifunc.h"
 #include "gromacs/topology/mtop_util.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/real.h"
 
 #include "testutils/refdata.h"
 #include "testutils/testasserts.h"
 
 namespace gmx
 {
-
+namespace test
+{
 namespace
 {
 
@@ -113,7 +124,7 @@ TEST(UpdateGroupsCog, ComputesCogs)
     auto updateGroupingsPerMoleculeType = std::get<std::vector<RangePartitioning>>(result);
     real temperature                    = 300;
 
-    UpdateGroupsCog updateGroupsCog(mtop, updateGroupingsPerMoleculeType, temperature, numAtoms);
+    UpdateGroupsCog updateGroupsCog(mtop, updateGroupingsPerMoleculeType, temperature);
 
     EXPECT_FLOAT_EQ(updateGroupsCog.maxUpdateGroupRadius(), 0.083887339);
 
@@ -135,7 +146,7 @@ TEST(UpdateGroupsCog, ComputesCogs)
         }
     }
 
-    updateGroupsCog.addCogs(globalAtomIndices, positions);
+    updateGroupsCog.addCogs(globalAtomIndices, positions, {});
 
     EXPECT_EQ(updateGroupsCog.numCogs(), numMolecules);
 
@@ -153,4 +164,5 @@ TEST(UpdateGroupsCog, ComputesCogs)
 }
 
 } // namespace
+} // namespace test
 } // namespace gmx

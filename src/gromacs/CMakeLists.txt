@@ -223,9 +223,6 @@ if (TARGET Heffte::Heffte)
     target_link_libraries(libgromacs PRIVATE Heffte::Heffte)
 endif()
 
-if(GMX_GPU_FFT_HIPFFT)
-    target_link_libraries(libgromacs PRIVATE roc::rocfft hip::hipfft)
-endif()
 if(GMX_GPU_FFT_VKFFT)
     target_link_libraries(libgromacs PRIVATE VkFFT)
 endif()
@@ -234,25 +231,12 @@ if(GMX_GPU_FFT_ROCFFT)
 endif()
 
 if(GMX_GPU_FFT_ONEMKL)
-    # Availability of targets was checked in gmxManageOneMKL.cmake.
-    # Linking directly against backend library to avoid double-free issue
-    # encountered with cufft backend and urTearDown for the DPC++ runtime.
-    # See #5000.
-    if("${SYCL_CXX_FLAGS_EXTRA}" MATCHES "fsycl-targets=.*(nvptx64|nvidia_gpu)")
-        target_link_libraries(libgromacs PRIVATE MKL::onemkl_dft_cufft)
-        target_compile_definitions(libgromacs PRIVATE ONEMKL_USING_CUFFT_BACKEND)
-    elseif("${SYCL_CXX_FLAGS_EXTRA}" MATCHES "fsycl-targets=.*(amdgcn|amd_gpu)")
-        target_link_libraries(libgromacs PRIVATE MKL::onemkl_dft_rocfft)
-        target_compile_definitions(libgromacs PRIVATE ONEMKL_USING_ROCFFT_BACKEND)
-    else()
-        target_link_libraries(libgromacs PRIVATE MKL::onemkl_dft_mklgpu)
-        target_compile_definitions(libgromacs PRIVATE ONEMKL_USING_MKLGPU_BACKEND)
-    endif()
-    # Linking directly against the backend seems to additionally require
-    # manually including the required headers.
-    get_target_property(ONEMKL_DFT_INCLUDE_DIR MKL::onemkl INTERFACE_INCLUDE_DIRECTORIES)
-    target_include_directories(libgromacs PRIVATE ${ONEMKL_DFT_INCLUDE_DIR})
+    target_link_libraries(libgromacs PRIVATE MKL::onemkl)
 endif()
+
+if (TARGET MPI::MPI_CXX)
+    target_link_libraries(libgromacs PRIVATE MPI::MPI_CXX)
+endif ()
 
 target_link_libraries(libgromacs PRIVATE $<BUILD_INTERFACE:common>)
 # As long as the libgromacs target has source files that reference headers from
@@ -468,6 +452,8 @@ target_link_libraries(libgromacs PRIVATE lmfit)
 target_link_libraries(libgromacs PRIVATE muparser::muparser)
 gmx_manage_colvars()
 target_link_libraries(libgromacs PRIVATE colvars)
+gmx_manage_plumed()
+target_link_libraries(libgromacs PRIVATE plumedgmx)
 
 # Make sure we fix "everything" found by compilers that support that
 gmx_warn_on_everything(libgromacs)

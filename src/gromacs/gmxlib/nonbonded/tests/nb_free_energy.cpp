@@ -50,7 +50,16 @@
 
 #include "gromacs/gmxlib/nonbonded/nb_free_energy.h"
 
+#include "config.h"
+
 #include <cmath>
+
+#include <iterator>
+#include <memory>
+#include <string>
+#include <tuple>
+#include <utility>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -68,6 +77,7 @@
 #include "gromacs/mdtypes/forcerec.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/interaction_const.h"
+#include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/nblist.h"
 #include "gromacs/pbcutil/ishift.h"
@@ -75,8 +85,11 @@
 #include "gromacs/tables/forcetable.h"
 #include "gromacs/topology/forcefieldparameters.h"
 #include "gromacs/topology/idef.h"
+#include "gromacs/topology/ifunc.h"
 #include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/enumerationhelpers.h"
+#include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/strconvert.h"
 #include "gromacs/utility/stringstream.h"
@@ -247,7 +260,7 @@ public:
                       InteractionModifiers   vdwMod)
     {
         icHelper_.initInteractionConst(coulType, vdwType, vdwMod);
-        nbfp_        = makeNonBondedParameterLists(idef.atnr, idef.iparams, false);
+        nbfp_ = makeNonBondedParameterLists(idef.atnr, false, idef.iparams, false);
         ljPmeC6Grid_ = makeLJPmeC6GridCorrectionParameters(idef.atnr, idef.iparams, LongRangeVdW::Geom);
     }
 
@@ -338,25 +351,21 @@ struct AtomData
     // perturbation pattern: {no-pert, vdw- and coul-pert, coul-pert, vdw-pert}
 
     // neighbourhood information
-    std::vector<int> iAtoms  = { 0 };
-    std::vector<int> jAtoms  = { 0, 1, 2, 3 };
-    std::vector<int> jIndex  = { 0, 4 };
-    std::vector<int> shift   = { 0 };
-    std::vector<int> gid     = { 0 };
-    std::vector<int> exclFep = { 0, 1, 1, 1 };
+    std::vector<int>  iAtoms  = { 0 };
+    std::vector<int>  jAtoms  = { 0, 1, 2, 3 };
+    std::vector<int>  shift   = { 0 };
+    std::vector<int>  gid     = { 0 };
+    std::vector<bool> exclFep = { false, true, true, true };
 
     // construct t_nblist
     t_nblist getNbList()
     {
         t_nblist nbl;
-        nbl.nri      = 1;
-        nbl.nrj      = 4;
-        nbl.iinr     = iAtoms;
-        nbl.jindex   = jIndex;
-        nbl.jjnr     = jAtoms;
-        nbl.shift    = shift;
-        nbl.gid      = gid;
-        nbl.excl_fep = exclFep;
+        nbl.addIEntry({ iAtoms[0], shift[0], gid[0] }, jAtoms.size());
+        for (size_t j = 0; j < jAtoms.size(); j++)
+        {
+            nbl.addJEntry({ jAtoms[j], exclFep[j] });
+        }
         return nbl;
     }
 };

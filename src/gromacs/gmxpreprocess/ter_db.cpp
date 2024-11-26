@@ -36,6 +36,7 @@
 #include "ter_db.h"
 
 #include <cctype>
+#include <cstdio>
 #include <cstring>
 
 #include <algorithm>
@@ -51,6 +52,9 @@
 #include "gromacs/gmxpreprocess/h_db.h"
 #include "gromacs/gmxpreprocess/notset.h"
 #include "gromacs/gmxpreprocess/toputil.h"
+#include "gromacs/topology/atoms.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/exceptions.h"
@@ -58,6 +62,7 @@
 #include "gromacs/utility/futil.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/strdb.h"
+#include "gromacs/utility/stringcompare.h"
 #include "gromacs/utility/stringtoenumvalueconverter.h"
 #include "gromacs/utility/stringutil.h"
 
@@ -175,9 +180,9 @@ static void print_ter_db(const char*                                ff,
     {
         fprintf(out, "[ %s ]\n", modification.name.c_str());
 
-        if (std::any_of(modification.hack.begin(), modification.hack.end(), [](const auto& mod) {
-                return mod.type() == MoleculePatchType::Replace;
-            }))
+        if (std::any_of(modification.hack.begin(),
+                        modification.hack.end(),
+                        [](const auto& mod) { return mod.type() == MoleculePatchType::Replace; }))
         {
             fprintf(out, "[ %s ]\n", enumValueToString(ReplaceType::Repl));
             for (const auto& hack : modification.hack)
@@ -189,9 +194,9 @@ static void print_ter_db(const char*                                ff,
                 }
             }
         }
-        if (std::any_of(modification.hack.begin(), modification.hack.end(), [](const auto& mod) {
-                return mod.type() == MoleculePatchType::Add;
-            }))
+        if (std::any_of(modification.hack.begin(),
+                        modification.hack.end(),
+                        [](const auto& mod) { return mod.type() == MoleculePatchType::Add; }))
         {
             fprintf(out, "[ %s ]\n", enumValueToString(ReplaceType::Add));
             for (const auto& hack : modification.hack)
@@ -203,9 +208,9 @@ static void print_ter_db(const char*                                ff,
                 }
             }
         }
-        if (std::any_of(modification.hack.begin(), modification.hack.end(), [](const auto& mod) {
-                return mod.type() == MoleculePatchType::Delete;
-            }))
+        if (std::any_of(modification.hack.begin(),
+                        modification.hack.end(),
+                        [](const auto& mod) { return mod.type() == MoleculePatchType::Delete; }))
         {
             fprintf(out, "[ %s ]\n", enumValueToString(ReplaceType::Del));
             for (const auto& hack : modification.hack)
@@ -286,6 +291,7 @@ static void read_ter_db_file(const std::filesystem::path&        fn,
             if (!btkw.has_value())
             {
                 /* this is a hack: add/rename/delete atoms */
+                GMX_RELEASE_ASSERT(rtkw.has_value(), "Need valid ReplaceType");
                 /* make space for hacks */
                 block->hack.emplace_back();
                 MoleculePatch* hack = &block->hack.back();
@@ -492,9 +498,10 @@ std::vector<MoleculePatchDatabase*> filter_ter(gmx::ArrayRef<MoleculePatchDataba
                 /* Check that we haven't already added a residue-specific version
                  * of this terminus.
                  */
-                auto found = std::find_if(list.begin(), list.end(), [&s](const MoleculePatchDatabase* b) {
-                    return strstr(b->name.c_str(), s) != nullptr;
-                });
+                auto found = std::find_if(list.begin(),
+                                          list.end(),
+                                          [&s](const MoleculePatchDatabase* b)
+                                          { return strstr(b->name.c_str(), s) != nullptr; });
                 if (found == list.end())
                 {
                     list.push_back(&*it);

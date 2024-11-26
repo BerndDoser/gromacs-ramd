@@ -37,12 +37,16 @@
 
 #include "config.h"
 
+#include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
 #include <algorithm>
+#include <filesystem>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "gromacs/commandline/filenm.h"
@@ -59,6 +63,7 @@
 #include "gromacs/math/units.h"
 #include "gromacs/math/utilities.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/mdlib/groupcoord.h"
 #include "gromacs/mdlib/stat.h"
 #include "gromacs/mdrunutility/handlerestart.h"
@@ -72,12 +77,20 @@
 #include "gromacs/timing/wallcycle.h"
 #include "gromacs/topology/mtop_lookup.h"
 #include "gromacs/topology/mtop_util.h"
+#include "gromacs/topology/topology.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/basedefinitions.h"
+#include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/fatalerror.h"
+#include "gromacs/utility/futil.h"
+#include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/pleasecite.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/stringutil.h"
+
+struct gmx_output_env_t;
 
 static const std::string RotStr = { "Enforced rotation:" };
 
@@ -376,9 +389,10 @@ static gmx_bool HaveFlexibleGroups(const t_rot* rot)
  * rotation potential? */
 static gmx_bool HavePotFitGroups(const t_rot* rot)
 {
-    auto foundIt = std::find_if(rot->grp.begin(), rot->grp.end(), [](const auto& grp) {
-        return RotationGroupFitting::Pot == grp.eFittype;
-    });
+    auto foundIt =
+            std::find_if(rot->grp.begin(),
+                         rot->grp.end(),
+                         [](const auto& grp) { return RotationGroupFitting::Pot == grp.eFittype; });
     return foundIt != rot->grp.end();
 }
 
@@ -743,7 +757,7 @@ static void get_slab_centers(gmx_enfrotgrp* erg, /* Enforced rotation group work
     /* Loop over slabs */
     for (int j = erg->slab_first; j <= erg->slab_last; j++)
     {
-        int slabIndex                = j - erg->slab_first;
+        int slabIndex = j - erg->slab_first;
         erg->slab_weights[slabIndex] = get_slab_weight(j, erg, xc, mc, &erg->slab_center[slabIndex]);
 
         /* We can do the calculations ONLY if there is weight in the slab! */
@@ -1988,7 +2002,7 @@ static void flex_precalc_inner_sum(const gmx_enfrotgrp* erg)
             /* Add this contribution to the inner sum: */
             rvec_add(innersumvec, tmpvec, innersumvec);
         } /* now we have the inner sum vector S^n for this slab */
-          /* Save it to be used in do_flex_lowlevel */
+        /* Save it to be used in do_flex_lowlevel */
         copy_rvec(innersumvec, erg->slab_innersumvec[slabIndex]);
     }
 }
@@ -2463,7 +2477,7 @@ static real do_flex_lowlevel(gmx_enfrotgrp* erg,
     return V;
 }
 
-static void sort_collective_coordinates(gmx_enfrotgrp*    erg,
+static void sort_collective_coordinates(gmx_enfrotgrp* erg,
                                         sort_along_vec_t* data) /* Buffer for sorting the positions */
 {
     /* The projection of the position vector on the rotation vector is
@@ -2477,9 +2491,10 @@ static void sort_collective_coordinates(gmx_enfrotgrp*    erg,
         copy_rvec(erg->referencePositions[i], data[i].x_ref);
     }
     /* Sort the 'data' structure */
-    std::sort(data, data + erg->rotg->nat, [](const sort_along_vec_t& a, const sort_along_vec_t& b) {
-        return a.xcproj < b.xcproj;
-    });
+    std::sort(data,
+              data + erg->rotg->nat,
+              [](const sort_along_vec_t& a, const sort_along_vec_t& b)
+              { return a.xcproj < b.xcproj; });
 
     /* Copy back the sorted values */
     for (int i = 0; i < erg->rotg->nat; i++)
@@ -3162,7 +3177,7 @@ static void do_radial_motion2(gmx_enfrotgrp*                 erg,
     rvec     innersumvec;
     gmx_bool bCalcPotFit;
 
-    bPF         = erg->rotg->eType == EnforcedRotationGroupType::Rm2pf;
+    bPF = erg->rotg->eType == EnforcedRotationGroupType::Rm2pf;
     bCalcPotFit = (bOutstepRot || bOutstepSlab) && (RotationGroupFitting::Pot == erg->rotg->eFittype);
 
     clear_rvec(yj0_yc0); /* Make the compiler happy */

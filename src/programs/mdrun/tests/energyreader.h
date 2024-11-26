@@ -53,6 +53,7 @@
 
 #include <cstdint>
 
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -63,6 +64,9 @@
 #include "gromacs/utility/unique_cptr.h"
 
 #include "testutils/testasserts.h"
+
+struct ener_file;
+struct t_enxframe;
 
 namespace gmx
 {
@@ -87,7 +91,7 @@ typedef std::unique_ptr<EnergyFrameReader> EnergyFrameReaderPtr;
  *
  * This function is intended to have the main responsibility for
  * making EnergyFrameReader objects. */
-EnergyFrameReaderPtr openEnergyFileToReadTerms(const std::string&              filename,
+EnergyFrameReaderPtr openEnergyFileToReadTerms(const std::string& filename,
                                                const std::vector<std::string>& requiredEnergyTermNames);
 
 //! Convenience smart pointer typedef

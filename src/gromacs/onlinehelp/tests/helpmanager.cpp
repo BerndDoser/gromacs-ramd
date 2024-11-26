@@ -43,12 +43,14 @@
 #include "gromacs/onlinehelp/helpmanager.h"
 
 #include <string>
+#include <utility>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "gromacs/onlinehelp/helptopic.h"
 #include "gromacs/onlinehelp/helpwritercontext.h"
+#include "gromacs/onlinehelp/ihelptopic.h"
 #include "gromacs/onlinehelp/tests/mock_helptopic.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/stringstream.h"
@@ -57,6 +59,10 @@
 #include "testutils/stringtest.h"
 #include "testutils/testasserts.h"
 
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
@@ -168,3 +174,5 @@ TEST_F(HelpTopicFormattingTest, FormatsCompositeTopicWithSubTopics)
 }
 
 } // namespace
+} // namespace test
+} // namespace gmx

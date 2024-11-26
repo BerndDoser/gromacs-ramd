@@ -43,7 +43,9 @@
 
 #include "gromacs/trajectoryanalysis/modules/scattering.h"
 
+#include <filesystem>
 #include <string>
+#include <tuple>
 
 #include <gtest/gtest-param-test.h>
 #include <gtest/gtest.h>
@@ -52,6 +54,7 @@
 #include "gromacs/utility/stringutil.h"
 
 #include "testutils/cmdlinetest.h"
+#include "testutils/testasserts.h"
 #include "testutils/textblockmatchers.h"
 #include "testutils/xvgtest.h"
 
@@ -93,7 +96,8 @@ TEST_P(ScatteringModule, DirectMode)
     setTrajectory(inputFilename.c_str());
     setOutputFile(
             "-o",
-            formatString("%s-direct-%s.xvg", inputBasename.c_str(), std::get<1>(params).c_str()).c_str(),
+            formatString("%s-direct-%s.xvg", inputBasename.string().c_str(), std::get<1>(params).c_str())
+                    .c_str(),
             toler);
     command.addOption("-sel", "Protein");
     command.addOption("-scattering-type", std::get<1>(params));
@@ -117,7 +121,8 @@ TEST_P(ScatteringModule, MCMode)
     setTopology(inputFilename.c_str());
     setTrajectory(inputFilename.c_str());
     setOutputFile("-o",
-                  formatString("%s-mc-%s.xvg", inputBasename.c_str(), std::get<1>(params).c_str()).c_str(),
+                  formatString("%s-mc-%s.xvg", inputBasename.string().c_str(), std::get<1>(params).c_str())
+                          .c_str(),
                   toler);
     command.addOption("-sel", "Protein");
     command.addOption("-scattering-type", std::get<1>(params));

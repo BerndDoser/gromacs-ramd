@@ -43,6 +43,7 @@
 #include "optionsassigner.h"
 
 #include <deque>
+#include <vector>
 
 #include "gromacs/options/abstractoptionstorage.h"
 #include "gromacs/options/options.h"
@@ -169,7 +170,7 @@ void OptionsAssigner::startSection(const char* name)
     Impl::Section* section = impl_->currentSection().findSection(name);
     if (section == nullptr)
     {
-        GMX_THROW(InvalidInputError("Unknown subsection"));
+        GMX_THROW(InvalidInputError("Unknown section " + std::string(name)));
     }
     impl_->sectionStack_.push_back(section);
     section->start();

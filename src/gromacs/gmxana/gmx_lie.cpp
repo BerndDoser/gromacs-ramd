@@ -38,16 +38,25 @@
 #include <cstdlib>
 #include <cstring>
 
+#include <filesystem>
+#include <string>
+
+#include "gromacs/commandline/filenm.h"
 #include "gromacs/commandline/pargs.h"
 #include "gromacs/commandline/viewit.h"
 #include "gromacs/fileio/enxio.h"
+#include "gromacs/fileio/filetypes.h"
 #include "gromacs/fileio/trxio.h"
 #include "gromacs/fileio/xvgr.h"
 #include "gromacs/gmxana/gmx_ana.h"
 #include "gromacs/math/functions.h"
 #include "gromacs/trajectory/energyframe.h"
 #include "gromacs/utility/arraysize.h"
+#include "gromacs/utility/basedefinitions.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
+
+struct gmx_output_env_t;
 
 typedef struct
 {
@@ -134,21 +143,21 @@ int gmx_lie(int argc, char* argv[])
     static const char* ligand = "none";
     t_pargs            pa[]   = {
         { "-Elj",
-          FALSE,
-          etREAL,
-          { &lie_lj },
-          "Lennard-Jones interaction between ligand and solvent" },
+                       FALSE,
+                       etREAL,
+                       { &lie_lj },
+                       "Lennard-Jones interaction between ligand and solvent" },
         { "-Eqq", FALSE, etREAL, { &lie_qq }, "Coulomb interaction between ligand and solvent" },
         { "-Clj",
-          FALSE,
-          etREAL,
-          { &fac_lj },
-          "Factor in the LIE equation for Lennard-Jones component of energy" },
+                       FALSE,
+                       etREAL,
+                       { &fac_lj },
+                       "Factor in the LIE equation for Lennard-Jones component of energy" },
         { "-Cqq",
-          FALSE,
-          etREAL,
-          { &fac_qq },
-          "Factor in the LIE equation for Coulomb component of energy" },
+                       FALSE,
+                       etREAL,
+                       { &fac_qq },
+                       "Factor in the LIE equation for Coulomb component of energy" },
         { "-ligand", FALSE, etSTR, { &ligand }, "Name of the ligand in the energy file" }
     };
 #define NPA asize(pa)

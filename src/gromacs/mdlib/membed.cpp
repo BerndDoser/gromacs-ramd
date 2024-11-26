@@ -37,8 +37,16 @@
 
 #include <csignal>
 #include <cstdlib>
+#include <cstring>
+
+#include <algorithm>
+#include <filesystem>
+#include <iterator>
+#include <string>
+#include <vector>
 
 #include "gromacs/commandline/filenm.h"
+#include "gromacs/fileio/filetypes.h"
 #include "gromacs/fileio/readinp.h"
 #include "gromacs/fileio/warninp.h"
 #include "gromacs/gmxlib/network.h"
@@ -48,16 +56,25 @@
 #include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/pbcutil/pbc.h"
+#include "gromacs/topology/atoms.h"
+#include "gromacs/topology/block.h"
+#include "gromacs/topology/idef.h"
+#include "gromacs/topology/ifunc.h"
 #include "gromacs/topology/index.h"
 #include "gromacs/topology/mtop_lookup.h"
 #include "gromacs/topology/mtop_util.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/topology/topology_enums.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/cstringutil.h"
+#include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/filestream.h"
 #include "gromacs/utility/futil.h"
 #include "gromacs/utility/smalloc.h"
+#include "gromacs/utility/stringutil.h"
 
 /* information about scaling center */
 typedef struct
@@ -1106,9 +1123,10 @@ gmx_membed_t* init_membed(FILE*          fplog,
         fprintf(stderr, "\nSelect a group to embed in the membrane:\n");
         get_index(&atoms, opt2fn_null("-mn", nfile, fnm), 1, &(ins_at->nr), &(ins_at->index), &ins);
 
-        auto found = std::find_if(gnames.begin(), gnames.end(), [&ins](const auto& name) {
-            return gmx::equalCaseInsensitive(ins, name);
-        });
+        auto found = std::find_if(gnames.begin(),
+                                  gnames.end(),
+                                  [&ins](const auto& name)
+                                  { return gmx::equalCaseInsensitive(ins, name); });
 
         if (found == gnames.end())
         {

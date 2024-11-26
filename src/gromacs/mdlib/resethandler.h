@@ -67,20 +67,23 @@
 #define GMX_MDLIB_RESETHANDLER_H
 
 #include <cstdint>
+#include <cstdio>
 
 #include "gromacs/compat/pointers.h"
 #include "gromacs/mdlib/simulationsignal.h"
 #include "gromacs/utility/logger.h"
+#include "gromacs/utility/real.h"
 
 struct gmx_pme_t;
 struct gmx_wallcycle;
 struct gmx_walltime_accounting;
-struct nonbonded_verlet_t;
-struct pme_load_balancing_t;
 struct t_nrnb;
+struct t_commrec;
+struct pme_load_balancing_t;
 
 namespace gmx
 {
+struct nonbonded_verlet_t;
 
 /*! \brief Reset signals
  *

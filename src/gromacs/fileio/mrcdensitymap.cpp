@@ -44,13 +44,21 @@
 
 #include "mrcdensitymap.h"
 
+#include <cstdio>
+
 #include <algorithm>
+#include <iterator>
 #include <vector>
 
 #include "gromacs/fileio/gmxfio.h"
 #include "gromacs/fileio/gmxfio_xdr.h"
 #include "gromacs/fileio/mrcdensitymapheader.h"
+#include "gromacs/math/coordinatetransformation.h"
+#include "gromacs/mdspan/extents.h"
+#include "gromacs/mdspan/layouts.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/exceptions.h"
+#include "gromacs/utility/futil.h"
 #include "gromacs/utility/inmemoryserializer.h"
 #include "gromacs/utility/iserializer.h"
 #include "gromacs/utility/stringutil.h"
@@ -183,7 +191,7 @@ MrcDensityMapOfFloatFromFileReader::Impl::Impl(const std::filesystem::path& file
     if (!mrcHeaderIsSane(reader_->header()))
     {
         serializer_ = std::make_unique<InMemoryDeserializer>(buffer_, false, EndianSwapBehavior::Swap);
-        reader_     = std::make_unique<MrcDensityMapOfFloatReader>(serializer_.get());
+        reader_ = std::make_unique<MrcDensityMapOfFloatReader>(serializer_.get());
         if (!mrcHeaderIsSane(reader_->header()))
         {
             GMX_THROW(FileIOError(gmx::formatString(

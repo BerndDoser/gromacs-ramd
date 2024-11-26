@@ -36,9 +36,19 @@
 
 #include "read_params.h"
 
+#include <cinttypes>
+#include <cmath>
+#include <cstdio>
+
 #include <algorithm>
+#include <filesystem>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <vector>
 
 #include "gromacs/applied_forces/awh/awh.h"
+#include "gromacs/applied_forces/awh/dimparams.h"
 #include "gromacs/fileio/readinp.h"
 #include "gromacs/fileio/warninp.h"
 #include "gromacs/math/units.h"
@@ -53,9 +63,12 @@
 #include "gromacs/pulling/pull.h"
 #include "gromacs/random/seed.h"
 #include "gromacs/topology/mtop_util.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/fatalerror.h"
+#include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/iserializer.h"
 #include "gromacs/utility/stringutil.h"
 
@@ -705,8 +718,8 @@ AwhDimParams::AwhDimParams(std::vector<t_inpfile>* inp, const std::string& prefi
         const double diffusion_default = 1e-5;
         auto         message           = formatString(
                 "%s not explicitly set by user. You can choose to use a default "
-                "value (%g nm^2/ps or rad^2/ps) but this may very well be "
-                "non-optimal for your system!",
+                                  "value (%g nm^2/ps or rad^2/ps) but this may very well be "
+                                  "non-optimal for your system!",
                 opt.c_str(),
                 diffusion_default);
         wi->addNote(message);
@@ -991,7 +1004,7 @@ AwhParams::AwhParams(std::vector<t_inpfile>* inp, WarningHandler* wi)
 
     printStringNoNewline(inp, "Free energy and bias update interval in number of samples");
     opt                         = "awh-nsamples-update";
-    numSamplesUpdateFreeEnergy_ = get_eint(inp, opt, 10, wi);
+    numSamplesUpdateFreeEnergy_ = get_eint(inp, opt, 100, wi);
 
     printStringNoNewline(
             inp, "When true, biases with share-group>0 are shared between multiple simulations");
@@ -1328,7 +1341,7 @@ void setStateDependentAwhParams(AwhParams*           awhParams,
                                 const gmx_mtop_t&    mtop,
                                 WarningHandler*      wi)
 {
-    /* The temperature is not really state depenendent but is not known
+    /* The temperature is not really state dependent but is not known
      * when read_awhParams is called (in get ir).
      * It is known first after do_index has been called in grompp.cpp.
      */
@@ -1416,9 +1429,12 @@ void checkAwhParams(const AwhParams& awhParams, const t_inputrec& ir, WarningHan
         checkBiasParams(awhBiasParams[k], prefixawh, ir, wi);
         /* Check if there is a FEP lambda dimension. */
         const auto dimParams = awhBiasParams[k].dimParams();
-        haveFepLambdaDim = std::any_of(dimParams.begin(), dimParams.end(), [](const auto& dimParam) {
-            return dimParam.coordinateProvider() == AwhCoordinateProviderType::FreeEnergyLambda;
-        });
+        haveFepLambdaDim     = std::any_of(dimParams.begin(),
+                                       dimParams.end(),
+                                       [](const auto& dimParam) {
+                                           return dimParam.coordinateProvider()
+                                                  == AwhCoordinateProviderType::FreeEnergyLambda;
+                                       });
     }
 
     if (haveFepLambdaDim)

@@ -140,10 +140,11 @@ void gpuHalo(gmx_domdec_t* dd, matrix box, HostVector<RVec>* h_x, int numAtomsTo
 
     copyToDeviceBuffer(&d_x, h_x->data(), 0, numAtomsTotal, deviceStream, GpuApiCallBehavior::Sync, nullptr);
 
-    const int numPulses = std::accumulate(
-            dd->comm->cd.begin(), dd->comm->cd.end(), 0, [](const int a, const auto& b) {
-                return a + b.numPulses();
-            });
+    const int numPulses =
+            std::accumulate(dd->comm->cd.begin(),
+                            dd->comm->cd.end(),
+                            0,
+                            [](const int a, const auto& b) { return a + b.numPulses(); });
     const int numExtraConsumptions = GMX_THREAD_MPI ? dd->ndim : 0;
     // Will be consumed once for each pulse, and, with tMPI, once more for each dim on the first pulse
     GpuEventSynchronizer coordinatesReadyOnDeviceEvent(numPulses + numExtraConsumptions,
@@ -157,8 +158,8 @@ void gpuHalo(gmx_domdec_t* dd, matrix box, HostVector<RVec>* h_x, int numAtomsTo
     {
         for (int pulse = 0; pulse < dd->comm->cd[d].numPulses(); pulse++)
         {
-            gpuHaloExchange[d].push_back(
-                    GpuHaloExchange(dd, d, MPI_COMM_WORLD, deviceContext, pulse, nullptr));
+            gpuHaloExchange[d].push_back(GpuHaloExchange(
+                    dd, d, MPI_COMM_WORLD, MPI_COMM_WORLD, deviceContext, pulse, false, nullptr));
         }
     }
 
@@ -258,7 +259,7 @@ void define1dHaloWith1Pulse(gmx_domdec_t* dd, std::vector<gmx_domdec_ind_t>* ind
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    std::vector<int> indexvec;
+    FastVector<int>  indexvec;
     gmx_domdec_ind_t ind;
 
     dd->ndim     = 1;
@@ -296,7 +297,7 @@ void define1dHaloWith2Pulses(gmx_domdec_t* dd, std::vector<gmx_domdec_ind_t>* in
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    std::vector<int> indexvec;
+    FastVector<int>  indexvec;
     gmx_domdec_ind_t ind;
 
     dd->ndim     = 1;
@@ -346,7 +347,7 @@ void define2dHaloWith1PulseInEachDim(gmx_domdec_t* dd, std::vector<gmx_domdec_in
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    std::vector<int> indexvec;
+    FastVector<int>  indexvec;
     gmx_domdec_ind_t ind;
 
     dd->ndim  = 2;
@@ -388,7 +389,7 @@ void define2dHaloWith2PulsesInDim1(gmx_domdec_t* dd, std::vector<gmx_domdec_ind_
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    std::vector<int> indexvec;
+    FastVector<int>  indexvec;
     gmx_domdec_ind_t ind;
 
     dd->ndim  = 2;
@@ -529,8 +530,9 @@ TEST(HaloExchangeTest, Coordinates1dHaloWith1Pulse)
     initHaloData(h_x.data(), numHomeAtoms, numAtomsTotal);
 
     // Set up dd
-    t_inputrec   ir;
-    gmx_domdec_t dd(ir);
+    t_inputrec         ir;
+    std::array<int, 1> ddDims = { 0 };
+    gmx_domdec_t       dd(ir, ddDims);
     dd.mpi_comm_all              = MPI_COMM_WORLD;
     dd.comm                      = std::make_unique<gmx_domdec_comm_t>();
     dd.unitCellInfo.haveScrewPBC = false;
@@ -584,8 +586,9 @@ TEST(HaloExchangeTest, Coordinates1dHaloWith2Pulses)
     initHaloData(h_x.data(), numHomeAtoms, numAtomsTotal);
 
     // Set up dd
-    t_inputrec   ir;
-    gmx_domdec_t dd(ir);
+    t_inputrec         ir;
+    std::array<int, 1> ddDims = { 0 };
+    gmx_domdec_t       dd(ir, ddDims);
     dd.mpi_comm_all              = MPI_COMM_WORLD;
     dd.comm                      = std::make_unique<gmx_domdec_comm_t>();
     dd.unitCellInfo.haveScrewPBC = false;
@@ -640,8 +643,9 @@ TEST(HaloExchangeTest, Coordinates2dHaloWith1PulseInEachDim)
     initHaloData(h_x.data(), numHomeAtoms, numAtomsTotal);
 
     // Set up dd
-    t_inputrec   ir;
-    gmx_domdec_t dd(ir);
+    t_inputrec         ir;
+    std::array<int, 2> ddDims = { 0, 1 };
+    gmx_domdec_t       dd(ir, ddDims);
     dd.mpi_comm_all              = MPI_COMM_WORLD;
     dd.comm                      = std::make_unique<gmx_domdec_comm_t>();
     dd.unitCellInfo.haveScrewPBC = false;
@@ -695,8 +699,9 @@ TEST(HaloExchangeTest, Coordinates2dHaloWith2PulsesInDim1)
     initHaloData(h_x.data(), numHomeAtoms, numAtomsTotal);
 
     // Set up dd
-    t_inputrec   ir;
-    gmx_domdec_t dd(ir);
+    t_inputrec         ir;
+    std::array<int, 2> ddDims = { 0, 1 };
+    gmx_domdec_t       dd(ir, ddDims);
     dd.mpi_comm_all              = MPI_COMM_WORLD;
     dd.comm                      = std::make_unique<gmx_domdec_comm_t>();
     dd.unitCellInfo.haveScrewPBC = false;

@@ -40,17 +40,27 @@
  */
 #include "gmxpre.h"
 
+#include <cmath>
+#include <cstdlib>
+#include <cstring>
+
 #include <algorithm>
 #include <array>
+#include <list>
+#include <memory>
 #include <string>
 
 #include "gromacs/math/units.h"
 #include "gromacs/math/utilities.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/selection/indexutil.h"
 #include "gromacs/selection/position.h"
+#include "gromacs/selection/selvalue.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/stringutil.h"
 #include "gromacs/utility/unique_cptr.h"
@@ -130,7 +140,7 @@ static void convert_value(SelectionParserValue* value, e_selvalue_t type, Except
             try
             {
                 SelectionTreeElementPointer expr = _gmx_sel_init_position(value->expr_, nullptr, scanner);
-                *value                           = SelectionParserValue::createExpr(expr);
+                *value = SelectionParserValue::createExpr(expr);
             }
             catch (UserInputError& ex)
             {

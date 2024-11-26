@@ -37,10 +37,18 @@
 
 #include "config.h"
 
+#include <cstdlib>
+#include <cstring>
+
+#include <filesystem>
+#include <memory>
+#include <string>
+
 #include "gromacs/commandline/filenm.h"
 #include "gromacs/domdec/collect.h"
 #include "gromacs/domdec/domdec_struct.h"
 #include "gromacs/fileio/checkpoint.h"
+#include "gromacs/fileio/filetypes.h"
 #include "gromacs/fileio/gmxfio.h"
 #include "gromacs/fileio/tngio.h"
 #include "gromacs/fileio/trrio.h"
@@ -62,11 +70,19 @@
 #include "gromacs/mdtypes/swaphistory.h"
 #include "gromacs/timing/wallcycle.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/topology/topology_enums.h"
 #include "gromacs/utility/baseversion.h"
+#include "gromacs/utility/cstringutil.h"
+#include "gromacs/utility/enumerationhelpers.h"
+#include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/fatalerror.h"
+#include "gromacs/utility/futil.h"
+#include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/pleasecite.h"
 #include "gromacs/utility/programcontext.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
+#include "gromacs/utility/stringutil.h"
 #include "gromacs/utility/sysinfo.h"
 
 struct gmx_mdoutf
@@ -538,17 +554,17 @@ void mdoutf_write_checkpoint(gmx_mdoutf_t                    of,
                      of->mainRanksComm);
 }
 
-void mdoutf_write_to_trajectory_files(FILE*                           fplog,
-                                      const t_commrec*                cr,
-                                      gmx_mdoutf_t                    of,
-                                      int                             mdof_flags,
-                                      int                             natoms,
-                                      int64_t                         step,
-                                      double                          t,
-                                      t_state*                        state_local,
-                                      t_state*                        state_global,
-                                      ObservablesHistory*             observablesHistory,
-                                      gmx::ArrayRef<const gmx::RVec>  f_local,
+void mdoutf_write_to_trajectory_files(FILE*                          fplog,
+                                      const t_commrec*               cr,
+                                      gmx_mdoutf_t                   of,
+                                      int                            mdof_flags,
+                                      int                            natoms,
+                                      int64_t                        step,
+                                      double                         t,
+                                      t_state*                       state_local,
+                                      t_state*                       state_global,
+                                      ObservablesHistory*            observablesHistory,
+                                      gmx::ArrayRef<const gmx::RVec> f_local,
                                       gmx::WriteCheckpointDataHolder* modularSimulatorCheckpointData)
 {
     const rvec* f_global;
@@ -585,8 +601,8 @@ void mdoutf_write_to_trajectory_files(FILE*                           fplog,
         f_global = of->f_global;
         if (mdof_flags & MDOF_F)
         {
-            auto globalFRef = MAIN(cr) ? gmx::arrayRefFromArray(
-                                      reinterpret_cast<gmx::RVec*>(of->f_global), of->natoms_global)
+            auto globalFRef = MAIN(cr) ? gmx::arrayRefFromArray(reinterpret_cast<gmx::RVec*>(of->f_global),
+                                                                of->natoms_global)
                                        : gmx::ArrayRef<gmx::RVec>();
             dd_collect_vec(cr->dd,
                            state_local->ddp_count,

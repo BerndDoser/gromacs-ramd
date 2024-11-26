@@ -43,6 +43,11 @@
 
 #include "gromacs/gmxpreprocess/solvate.h"
 
+#include <string>
+
+#include <gtest/gtest.h>
+
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/futil.h"
 #include "gromacs/utility/textreader.h"
 
@@ -52,6 +57,10 @@
 #include "testutils/testfilemanager.h"
 #include "testutils/textblockmatchers.h"
 
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
@@ -129,3 +138,5 @@ TEST_F(SolvateTest, cs_pdb_big_box_Works)
 }
 
 } // namespace
+} // namespace test
+} // namespace gmx

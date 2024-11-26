@@ -52,31 +52,60 @@
 
 #include "gmxpre.h"
 
+#include "config.h"
+
+#include <cmath>
+#include <cstdint>
+
+#include <algorithm>
+#include <array>
+#include <filesystem>
+#include <memory>
 #include <numeric>
+#include <optional>
+#include <string>
+#include <tuple>
+#include <utility>
 #include <vector>
+
+#include <gtest/gtest.h>
 
 #include "gromacs/ewald/ewald_utils.h"
 #include "gromacs/gpu_utils/hostallocator.h"
+#include "gromacs/math/functions.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/mdlib/forcerec.h"
 #include "gromacs/mdlib/gmx_omp_nthreads.h"
 #include "gromacs/mdtypes/atominfo.h"
+#include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/interaction_const.h"
+#include "gromacs/mdtypes/locality.h"
+#include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/mdtypes/simulation_workload.h"
+#include "gromacs/nbnxm/atomdata.h"
 #include "gromacs/nbnxm/gridset.h"
 #include "gromacs/nbnxm/kernel_common.h"
 #include "gromacs/nbnxm/nbnxm.h"
 #include "gromacs/nbnxm/nbnxm_simd.h"
+#include "gromacs/nbnxm/pairlistparams.h"
 #include "gromacs/nbnxm/pairlistset.h"
 #include "gromacs/nbnxm/pairlistsets.h"
 #include "gromacs/nbnxm/pairsearch.h"
 #include "gromacs/pbcutil/ishift.h"
 #include "gromacs/pbcutil/pbc.h"
+#include "gromacs/topology/forcefieldparameters.h"
+#include "gromacs/topology/ifunc.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/fatalerror.h"
+#include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/listoflists.h"
 #include "gromacs/utility/logger.h"
+#include "gromacs/utility/range.h"
+#include "gromacs/utility/real.h"
+#include "gromacs/utility/stringutil.h"
 
 #include "testutils/refdata.h"
 #include "testutils/testasserts.h"
@@ -122,7 +151,7 @@ struct KernelOptions
     //! The number of OpenMP threads to use
     int numThreads = 1;
     //! The kernel setup
-    Nbnxm::KernelSetup kernelSetup;
+    NbnxmKernelSetup kernelSetup;
     //! The modifier for the VdW interactions
     InteractionModifiers vdwModifier = InteractionModifiers::PotShift;
     //! The LJ combination rule
@@ -182,15 +211,20 @@ std::unique_ptr<nonbonded_verlet_t> setupNbnxmForBenchInstance(const KernelOptio
             (options.useGpu ? PinningPolicy::PinnedIfSupported : PinningPolicy::CannotBePinned);
     const int numThreads = options.numThreads;
 
-    PairlistParams pairlistParams(options.kernelSetup.kernelType, false, options.pairlistCutoff, false);
-
-    Nbnxm::GridSet gridSet(
-            PbcType::Xyz, false, nullptr, nullptr, pairlistParams.pairlistType, false, numThreads, pinPolicy);
+    PairlistParams pairlistParams(options.kernelSetup.kernelType, {}, false, options.pairlistCutoff, false);
 
     auto pairlistSets = std::make_unique<PairlistSets>(pairlistParams, false, 0);
 
-    auto pairSearch = std::make_unique<PairSearch>(
-            PbcType::Xyz, false, nullptr, nullptr, pairlistParams.pairlistType, false, numThreads, pinPolicy);
+    const bool localAtomOrderMatchesNbnxmOrder = false;
+    auto       pairSearch                      = std::make_unique<PairSearch>(PbcType::Xyz,
+                                                   false,
+                                                   nullptr,
+                                                   nullptr,
+                                                   pairlistParams.pairlistType,
+                                                   false,
+                                                   localAtomOrderMatchesNbnxmOrder,
+                                                   numThreads,
+                                                   pinPolicy);
 
     auto atomData = std::make_unique<nbnxn_atomdata_t>(
             pinPolicy,
@@ -211,18 +245,16 @@ std::unique_ptr<nonbonded_verlet_t> setupNbnxmForBenchInstance(const KernelOptio
     const rvec lowerCorner = { 0, 0, 0 };
     const rvec upperCorner = { system.box[XX][XX], system.box[YY][YY], system.box[ZZ][ZZ] };
 
-    const real atomDensity = system.coordinates.size() / det(system.box);
-
     nbv->putAtomsOnGrid(system.box,
                         0,
                         lowerCorner,
                         upperCorner,
                         nullptr,
                         { 0, int(system.coordinates.size()) },
-                        atomDensity,
+                        system.coordinates.size(),
+                        system.coordinates.size() / det(system.box),
                         system.atomInfo,
                         system.coordinates,
-                        0,
                         nullptr);
 
     nbv->constructPairlist(gmx::InteractionLocality::Local, system.excls, 0, nullptr);
@@ -236,9 +268,9 @@ std::unique_ptr<nonbonded_verlet_t> setupNbnxmForBenchInstance(const KernelOptio
 struct KernelInputParameters
 {
     //! This type must match the layout of \c KernelInputParameters
-    using TupleT = std::tuple<Nbnxm::KernelType, CoulombKernelType, int, EnergyHandling>;
+    using TupleT = std::tuple<NbnxmKernelType, CoulombKernelType, int, EnergyHandling>;
     //! The kernel type and cluster pair layout
-    Nbnxm::KernelType kernelType;
+    NbnxmKernelType kernelType;
     //! The Coulomb kernel type
     CoulombKernelType coulombKernelType;
     //! The VdW interaction type
@@ -348,7 +380,7 @@ std::string nameOfTest(const testing::TestParamInfo<KernelInputParameters>& info
     }
     std::string testName =
             formatString("type_%s_Tab%s_%s_Coulomb%s_Vdw%s",
-                         lookup_kernel_name(info.param.kernelType),
+                         nbnxmKernelTypeToName(info.param.kernelType),
                          info.param.coulombKernelType == CoulombKernelType::Table
                                          || info.param.coulombKernelType == CoulombKernelType::TableTwin
                                  ? "Yes"
@@ -428,8 +460,8 @@ TEST_P(NbnxmKernelTest, WorksWith)
 
         // Coulomb settings
         options_.kernelSetup.ewaldExclusionType = isTabulated(parameters_.coulombKernelType)
-                                                          ? Nbnxm::EwaldExclusionType::Table
-                                                          : Nbnxm::EwaldExclusionType::Analytical;
+                                                          ? EwaldExclusionType::Table
+                                                          : EwaldExclusionType::Analytical;
         options_.coulombType                    = parameters_.coulombKernelType;
 
         // Van der Waals settings
@@ -465,7 +497,7 @@ TEST_P(NbnxmKernelTest, WorksWith)
                                  "double-precision build of GROMACS";
             }
 
-            if (options_.kernelSetup.kernelType == Nbnxm::KernelType::Cpu4x4_PlainC)
+            if (options_.kernelSetup.kernelType == NbnxmKernelType::Cpu4x4_PlainC)
             {
                 GTEST_SKIP() << "Plain-C kernels are never used to generate reference data";
             }
@@ -477,19 +509,23 @@ TEST_P(NbnxmKernelTest, WorksWith)
             }
         }
 
-        if (!sc_haveNbnxmSimd4xmKernels && parameters_.kernelType == Nbnxm::KernelType::Cpu4xN_Simd_4xN)
+        if (!sc_haveNbnxmSimd4xmKernels && parameters_.kernelType == NbnxmKernelType::Cpu4xN_Simd_4xN)
         {
             GTEST_SKIP()
                     << "Cannot test or generate data for 4xN kernels without suitable SIMD support";
         }
 
-        if (!sc_haveNbnxmSimd2xmmKernels && parameters_.kernelType == Nbnxm::KernelType::Cpu4xN_Simd_2xNN)
+        if (!sc_haveNbnxmSimd2xmmKernels && parameters_.kernelType == NbnxmKernelType::Cpu4xN_Simd_2xNN)
         {
             GTEST_SKIP() << "Cannot test or generate data for 2xNN kernels without suitable SIMD "
                             "support";
         }
 
-        if (options_.kernelSetup.kernelType == Nbnxm::KernelType::Cpu4x4_PlainC
+        const bool kernelIsPlainC =
+                (options_.kernelSetup.kernelType == NbnxmKernelType::Cpu4x4_PlainC
+                 || options_.kernelSetup.kernelType == NbnxmKernelType::Cpu1x1_PlainC);
+
+        if (kernelIsPlainC
             && (options_.coulombType == CoulombKernelType::Ewald
                 || options_.coulombType == CoulombKernelType::EwaldTwin))
         {
@@ -497,7 +533,7 @@ TEST_P(NbnxmKernelTest, WorksWith)
                     << "Analytical Ewald is not implemented for the plain-C kernel, skip this test";
         }
 
-        if (options_.kernelSetup.kernelType == Nbnxm::KernelType::Cpu4x4_PlainC
+        if (kernelIsPlainC
             && (parameters_.vdwKernelType == vdwktLJCUT_COMBGEOM
                 || parameters_.vdwKernelType == vdwktLJCUT_COMBLB))
         {
@@ -580,9 +616,36 @@ TEST_P(NbnxmKernelTest, WorksWith)
         nbv_->dispatchNonbondedKernel(
                 InteractionLocality::Local, ic, stepWork, enbvClearFYes, shiftVecs, vVdw, vCoulomb, nullptr);
 
+        const bool atomOrderMatches = nbv_->localAtomOrderMatchesNbnxmOrder();
+
         // Get and check the forces
-        std::vector<RVec> forces(system_.coordinates.size(), { 0.0_real, 0.0_real, 0.0_real });
-        nbv_->atomdata_add_nbat_f_to_f(AtomLocality::All, forces);
+        ArrayRef<const int> atomIndices = nbv_->getLocalAtomOrder();
+        std::vector<RVec> nbnxmForces(atomOrderMatches ? atomIndices.size() : system_.coordinates.size(),
+                                      { 0.0_real, 0.0_real, 0.0_real });
+        nbv_->atomdata_add_nbat_f_to_f(AtomLocality::All, nbnxmForces);
+
+        std::vector<RVec>    forceBuffer;
+        ArrayRef<const RVec> forces;
+        if (atomOrderMatches)
+        {
+            // Copy atoms to a buffer with local atom order
+            forceBuffer.resize(system_.coordinates.size());
+            for (gmx::Index i = 0; i < atomIndices.ssize(); i++)
+            {
+                const int a = atomIndices[i];
+                if (nonbonded_verlet_t::isValidLocalAtom(a))
+                {
+                    forceBuffer[a] = nbnxmForces[i];
+                }
+            }
+
+            forces = forceBuffer;
+        }
+        else
+        {
+            forces = nbnxmForces;
+        }
+
         forceChecker.checkSequence(forces.begin(), forces.end(), "Forces");
 
         // Check the energies, as applicable
@@ -620,9 +683,10 @@ TEST_P(NbnxmKernelTest, WorksWith)
 INSTANTIATE_TEST_SUITE_P(Combinations,
                          NbnxmKernelTest,
                          ::testing::ConvertGenerator<KernelInputParameters::TupleT>(::testing::Combine(
-                                 ::testing::Values(Nbnxm::KernelType::Cpu4x4_PlainC,
-                                                   Nbnxm::KernelType::Cpu4xN_Simd_4xN,
-                                                   Nbnxm::KernelType::Cpu4xN_Simd_2xNN),
+                                 ::testing::Values(NbnxmKernelType::Cpu1x1_PlainC,
+                                                   NbnxmKernelType::Cpu4x4_PlainC,
+                                                   NbnxmKernelType::Cpu4xN_Simd_4xN,
+                                                   NbnxmKernelType::Cpu4xN_Simd_2xNN),
                                  ::testing::Values(CoulombKernelType::ReactionField,
                                                    CoulombKernelType::Ewald,
                                                    CoulombKernelType::EwaldTwin,

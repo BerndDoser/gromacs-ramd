@@ -44,12 +44,18 @@
 #ifndef NBLIB_LISTEDFORCES_KERNELS_HPP
 #define NBLIB_LISTEDFORCES_KERNELS_HPP
 
+#include <cmath>
+#include <cstddef>
+
+#include <algorithm>
 #include <tuple>
 
 #include "gromacs/math/functions.h"
 #include "gromacs/math/vectypes.h"
+#include "gromacs/utility/real.h"
 
 #include "nblib/listed_forces/bondtypes.h"
+#include "nblib/particletype.h"
 
 namespace nblib
 {
@@ -591,7 +597,7 @@ inline auto threeCenterKernel(T dr, const QuarticAngle& angle)
 template<class T>
 inline auto threeCenterKernel(T theta, const RestrictedAngle& angle)
 {
-    T costheta         = std::cos(theta);
+    T costheta = std::cos(theta);
     auto [force, ePot] = harmonicScalarForce(angle.forceConstant(), angle.equilConstant(), costheta);
 
     // The above kernel call effectively computes the derivative of the potential with respect to

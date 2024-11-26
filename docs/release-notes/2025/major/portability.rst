@@ -7,6 +7,15 @@ Portability
    Also, please use the syntax :issue:`number` to reference issues on GitLab, without
    a space between the colon and number!
 
+Added support to compile |Gromacs| using AMD HIP as GPU backend
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+It is now possible to use AMD HIP directly as the GPU backend to run
+simulations on AMD devices. For now only the NBNxM kernels are can
+be offloaded to the device using this backend.
+
+:issue:`4947`
+
 Added support for the oneMKL interface library for GPU FFTs
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
@@ -15,3 +24,10 @@ SYCL backend. Either cuFFT or rocFFT can now be used with
 Intel DPC++ and Codeplay's plugins for NVIDIA and AMD GPUs.
 
 :issue:`4744`
+
+Update of required CMake version
+""""""""""""""""""""""""""""""""
+
+Updated required CMake version to 3.28
+
+:issue:`5014`

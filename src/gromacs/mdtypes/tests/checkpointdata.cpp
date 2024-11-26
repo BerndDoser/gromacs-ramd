@@ -35,16 +35,29 @@
 
 #include "gromacs/mdtypes/checkpointdata.h"
 
+#include <climits>
+#include <cstdint>
+
 #include <algorithm>
+#include <array>
+#include <filesystem>
+#include <functional>
+#include <iterator>
 #include <random>
+#include <string>
+#include <type_traits>
+#include <vector>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "gromacs/fileio/gmxfio.h"
 #include "gromacs/fileio/gmxfio_xdr.h"
+#include "gromacs/math/vectypes.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/inmemoryserializer.h"
+#include "gromacs/utility/real.h"
 
 #include "testutils/testfilemanager.h"
 
@@ -123,34 +136,32 @@ private:
     static const std::vector<T>& getTestVector();
 
     template<typename T>
-    static std::enable_if_t<IsSerializableType<T>::value && !std::is_same<T, bool>::value, const T*>
-    getBeginPointer();
+    static std::enable_if_t<IsSerializableType<T>::value && !std::is_same_v<T, bool>, const T*> getBeginPointer();
     template<typename T>
     static std::enable_if_t<IsVectorOfSerializableType<T>::value, const T*> getBeginPointer();
     template<typename T>
-    static std::enable_if_t<std::is_same<T, bool>::value, const T*> getBeginPointer();
+    static std::enable_if_t<std::is_same_v<T, bool>, const T*> getBeginPointer();
     template<typename T>
-    static std::enable_if_t<std::is_same<T, tensor>::value, const T*> getBeginPointer();
+    static std::enable_if_t<std::is_same_v<T, tensor>, const T*> getBeginPointer();
 
     template<typename T>
-    static std::enable_if_t<IsSerializableType<T>::value && !std::is_same<T, bool>::value, const T*>
-    getEndPointer();
+    static std::enable_if_t<IsSerializableType<T>::value && !std::is_same_v<T, bool>, const T*> getEndPointer();
     template<typename T>
     static std::enable_if_t<IsVectorOfSerializableType<T>::value, const T*> getEndPointer();
     template<typename T>
-    static std::enable_if_t<std::is_same<T, bool>::value, const T*> getEndPointer();
+    static std::enable_if_t<std::is_same_v<T, bool>, const T*> getEndPointer();
     template<typename T>
-    static std::enable_if_t<std::is_same<T, tensor>::value, const T*> getEndPointer();
+    static std::enable_if_t<std::is_same_v<T, tensor>, const T*> getEndPointer();
 
     template<typename T>
-    static std::enable_if_t<IsSerializableType<T>::value && !std::is_same<T, bool>::value, void>
+    static std::enable_if_t<IsSerializableType<T>::value && !std::is_same_v<T, bool>, void>
     increment(const T** ptr);
     template<typename T>
     static std::enable_if_t<IsVectorOfSerializableType<T>::value, void> increment(const T** ptr);
     template<typename T>
-    static std::enable_if_t<std::is_same<T, bool>::value, void> increment(const T** ptr);
+    static std::enable_if_t<std::is_same_v<T, bool>, void> increment(const T** ptr);
     template<typename T>
-    static std::enable_if_t<std::is_same<T, tensor>::value, void> increment(const T** ptr);
+    static std::enable_if_t<std::is_same_v<T, tensor>, void> increment(const T** ptr);
 
     static constexpr bool   testTrue    = true;
     static constexpr bool   testFalse   = false;
@@ -201,7 +212,7 @@ const std::vector<double>& TestValues::getTestVector()
 }
 
 template<typename T>
-std::enable_if_t<IsSerializableType<T>::value && !std::is_same<T, bool>::value, const T*> TestValues::getBeginPointer()
+std::enable_if_t<IsSerializableType<T>::value && !std::is_same_v<T, bool>, const T*> TestValues::getBeginPointer()
 {
     return getTestVector<T>().data();
 }
@@ -211,18 +222,18 @@ std::enable_if_t<IsVectorOfSerializableType<T>::value, const T*> TestValues::get
     return &getTestVector<typename T::value_type>();
 }
 template<typename T>
-std::enable_if_t<std::is_same<T, bool>::value, const T*> TestValues::getBeginPointer()
+std::enable_if_t<std::is_same_v<T, bool>, const T*> TestValues::getBeginPointer()
 {
     return &testTrue;
 }
 template<typename T>
-std::enable_if_t<std::is_same<T, tensor>::value, const T*> TestValues::getBeginPointer()
+std::enable_if_t<std::is_same_v<T, tensor>, const T*> TestValues::getBeginPointer()
 {
     return &testTensor1;
 }
 
 template<typename T>
-std::enable_if_t<IsSerializableType<T>::value && !std::is_same<T, bool>::value, const T*> TestValues::getEndPointer()
+std::enable_if_t<IsSerializableType<T>::value && !std::is_same_v<T, bool>, const T*> TestValues::getEndPointer()
 {
     return getTestVector<T>().data() + getTestVector<T>().size();
 }
@@ -232,18 +243,18 @@ std::enable_if_t<IsVectorOfSerializableType<T>::value, const T*> TestValues::get
     return &getTestVector<typename T::value_type>() + 1;
 }
 template<typename T>
-std::enable_if_t<std::is_same<T, bool>::value, const T*> TestValues::getEndPointer()
+std::enable_if_t<std::is_same_v<T, bool>, const T*> TestValues::getEndPointer()
 {
     return nullptr;
 }
 template<typename T>
-std::enable_if_t<std::is_same<T, tensor>::value, const T*> TestValues::getEndPointer()
+std::enable_if_t<std::is_same_v<T, tensor>, const T*> TestValues::getEndPointer()
 {
     return nullptr;
 }
 
 template<typename T>
-std::enable_if_t<IsSerializableType<T>::value && !std::is_same<T, bool>::value, void>
+std::enable_if_t<IsSerializableType<T>::value && !std::is_same_v<T, bool>, void>
 TestValues::increment(const T** ptr)
 {
     ++(*ptr);
@@ -254,12 +265,12 @@ std::enable_if_t<IsVectorOfSerializableType<T>::value, void> TestValues::increme
     ++(*ptr);
 }
 template<typename T>
-std::enable_if_t<std::is_same<T, bool>::value, void> TestValues::increment(const T** ptr)
+std::enable_if_t<std::is_same_v<T, bool>, void> TestValues::increment(const T** ptr)
 {
     *ptr = (*ptr == &testTrue) ? &testFalse : nullptr;
 }
 template<typename T>
-std::enable_if_t<std::is_same<T, tensor>::value, void> TestValues::increment(const T** ptr)
+std::enable_if_t<std::is_same_v<T, tensor>, void> TestValues::increment(const T** ptr)
 {
     *ptr = (*ptr == &testTensor1) ? &testTensor2 : nullptr;
 }
@@ -362,12 +373,10 @@ public:
         for (const auto& inputValue : TestValues::testValueGenerator<T>())
         {
             std::string key = "value" + std::to_string(writeFunctions_.size());
-            writeFunctions_.emplace_back([key, inputValue](WriteCheckpointData* checkpointData) {
-                writeInput(key, inputValue, checkpointData);
-            });
-            testFunctions_.emplace_back([key, inputValue](ReadCheckpointData* checkpointData) {
-                testOutput(key, inputValue, checkpointData);
-            });
+            writeFunctions_.emplace_back([key, inputValue](WriteCheckpointData* checkpointData)
+                                         { writeInput(key, inputValue, checkpointData); });
+            testFunctions_.emplace_back([key, inputValue](ReadCheckpointData* checkpointData)
+                                        { testOutput(key, inputValue, checkpointData); });
         }
     }
 

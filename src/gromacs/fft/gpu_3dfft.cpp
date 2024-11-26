@@ -52,7 +52,7 @@
 #    if GMX_GPU_FFT_VKFFT
 #        include "gpu_3dfft_hip_vkfft.h"
 #    else
-#        include "gpu_3dfft_hipfft.h"
+#        include "gpu_3dfft_hip_rocfft.h"
 #    endif
 #elif GMX_GPU_OPENCL
 #    if GMX_GPU_FFT_VKFFT
@@ -148,23 +148,7 @@ Gpu3dFft::Gpu3dFft(FftBackend           backend,
 #elif GMX_GPU_HIP
     switch (backend)
     {
-#    if GMX_GPU_FFT_HIPFFT
-        case FftBackend::Hipfft:
-            impl_ = std::make_unique<Gpu3dFft::ImplHipFft>(allocateRealGrid,
-                                                           comm,
-                                                           gridSizesInXForEachRank,
-                                                           gridSizesInYForEachRank,
-                                                           nz,
-                                                           performOutOfPlaceFFT,
-                                                           context,
-                                                           pmeStream,
-                                                           realGridSize,
-                                                           realGridSizePadded,
-                                                           complexGridSizePadded,
-                                                           realGrid,
-                                                           complexGrid);
-            break;
-#    elif GMX_GPU_FFT_VKFFT
+#    if GMX_GPU_FFT_VKFFT
         case FftBackend::HipVkfft:
             impl_ = std::make_unique<Gpu3dFft::ImplHipVkFft>(allocateRealGrid,
                                                              comm,
@@ -179,6 +163,22 @@ Gpu3dFft::Gpu3dFft(FftBackend           backend,
                                                              complexGridSizePadded,
                                                              realGrid,
                                                              complexGrid);
+            break;
+#    elif GMX_GPU_FFT_ROCFFT
+        case FftBackend::HipRocfft:
+            impl_ = std::make_unique<Gpu3dFft::ImplHipRocfft>(allocateRealGrid,
+                                                              comm,
+                                                              gridSizesInXForEachRank,
+                                                              gridSizesInYForEachRank,
+                                                              nz,
+                                                              performOutOfPlaceFFT,
+                                                              context,
+                                                              pmeStream,
+                                                              realGridSize,
+                                                              realGridSizePadded,
+                                                              complexGridSizePadded,
+                                                              realGrid,
+                                                              complexGrid);
             break;
 #    endif
         default: GMX_THROW(InternalError("Unsupported FFT backend requested"));

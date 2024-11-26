@@ -43,19 +43,29 @@
 #include "gromacs/analysisdata/modules/histogram.h"
 
 #include <cmath>
+#include <cstdint>
 
 #include <limits>
+#include <memory>
 #include <vector>
 
+#include "gromacs/analysisdata/abstractdata.h"
 #include "gromacs/analysisdata/dataframe.h"
+#include "gromacs/analysisdata/datamodule.h"
 #include "gromacs/analysisdata/datastorage.h"
 #include "gromacs/analysisdata/framelocaldata.h"
 #include "gromacs/math/functions.h"
 #include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/real.h"
 
 #include "frameaverager.h"
+
+namespace gmx
+{
+class AnalysisDataParallelOptions;
+} // namespace gmx
 
 namespace
 {
@@ -588,7 +598,7 @@ int AnalysisDataSimpleHistogramModule::flags() const
 }
 
 
-bool AnalysisDataSimpleHistogramModule::parallelDataStarted(AbstractAnalysisData*              data,
+bool AnalysisDataSimpleHistogramModule::parallelDataStarted(AbstractAnalysisData* data,
                                                             const AnalysisDataParallelOptions& options)
 {
     addModule(impl_->averager_);

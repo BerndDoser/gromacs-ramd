@@ -47,6 +47,8 @@
 
 #include "gromacs/analysisdata/arraydata.h"
 
+#include <string>
+
 #include <gtest/gtest.h>
 
 #include "gromacs/analysisdata/tests/datatest.h"
@@ -55,6 +57,10 @@
 
 using gmx::test::AnalysisDataTestInput;
 
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
@@ -150,3 +156,5 @@ TEST_F(AnalysisArrayDataTest, CanSetXAxisBeforeRowCount)
 }
 
 } // namespace
+} // namespace test
+} // namespace gmx

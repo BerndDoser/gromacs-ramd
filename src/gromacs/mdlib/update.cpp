@@ -39,13 +39,17 @@
 #include <cstdio>
 
 #include <algorithm>
+#include <filesystem>
 #include <memory>
+#include <string>
+#include <type_traits>
 
 #include "gromacs/domdec/domdec_struct.h"
 #include "gromacs/gmxlib/network.h"
 #include "gromacs/gmxlib/nrnb.h"
 #include "gromacs/listed_forces/disre.h"
 #include "gromacs/listed_forces/orires.h"
+#include "gromacs/math/arrayrefwithpadding.h"
 #include "gromacs/math/functions.h"
 #include "gromacs/math/paddedvector.h"
 #include "gromacs/math/units.h"
@@ -63,11 +67,15 @@
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/pulling/pull.h"
+#include "gromacs/random/seed.h"
 #include "gromacs/random/tabulatednormaldistribution.h"
 #include "gromacs/random/threefry.h"
 #include "gromacs/simd/simd.h"
 #include "gromacs/timing/wallcycle.h"
 #include "gromacs/topology/atoms.h"
+#include "gromacs/topology/topology_enums.h"
+#include "gromacs/utility/basedefinitions.h"
+#include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/futil.h"
@@ -196,9 +204,9 @@ private:
 };
 
 Update::Update(const t_inputrec& inputRecord, const gmx_ekindata_t& ekind, BoxDeformation* boxDeformation) :
-    impl_(new Impl(inputRecord, ekind, boxDeformation)){};
+    impl_(new Impl(inputRecord, ekind, boxDeformation)) {};
 
-Update::~Update(){};
+Update::~Update() {};
 
 const std::vector<bool>& Update::getAndersenRandomizeGroup() const
 {
@@ -351,7 +359,7 @@ enum class ParrinelloRahmanVelocityScaling
  * aligned (and padded) memory, possibly with some hints for the compilers.
  */
 template<StoreUpdatedVelocities storeUpdatedVelocities, NumTempScaleValues numTempScaleValues, ParrinelloRahmanVelocityScaling parrinelloRahmanVelocityScaling, typename VelocityType>
-static std::enable_if_t<std::is_same<VelocityType, rvec>::value || std::is_same<VelocityType, const rvec>::value, void>
+static std::enable_if_t<std::is_same_v<VelocityType, rvec> || std::is_same_v<VelocityType, const rvec>, void>
 updateMDLeapfrogSimple(int                                 start,
                        int                                 nrend,
                        real                                dt,
@@ -401,7 +409,6 @@ updateMDLeapfrogSimple(int                                 start,
             {
                 v[a][d] = vNew;
             }
-            // NOLINTNEXTLINE(readability-misleading-indentation) remove when clang-tidy-13 is required
             xprime[a][d] = x[a][d] + vNew * dt;
         }
     }
@@ -481,7 +488,7 @@ static inline void simdStoreRvecs(rvec* r, int index, UpdateSimdReal r0, UpdateS
  * \param[in]    f                      Forces
  */
 template<StoreUpdatedVelocities storeUpdatedVelocities, NumTempScaleValues numTempScaleValues, typename VelocityType>
-static std::enable_if_t<std::is_same<VelocityType, rvec>::value || std::is_same<VelocityType, const rvec>::value, void>
+static std::enable_if_t<std::is_same_v<VelocityType, rvec> || std::is_same_v<VelocityType, const rvec>, void>
 updateMDLeapfrogSimpleSimd(int                               start,
                            int                               nrend,
                            real                              dt,
@@ -520,13 +527,11 @@ updateMDLeapfrogSimpleSimd(int                               start,
             v1 = gmx::fma(f1 * invMass1, timestep, lambdaSystem * v1);
             v2 = gmx::fma(f2 * invMass2, timestep, lambdaSystem * v2);
         }
-        // NOLINTNEXTLINE(readability-misleading-indentation) remove when clang-tidy-13 is required
         if constexpr (storeUpdatedVelocities == StoreUpdatedVelocities::Yes)
         {
             simdStoreRvecs(v, a, v0, v1, v2);
         }
 
-        // NOLINTNEXTLINE(readability-misleading-indentation) remove when clang-tidy-13 is required
         UpdateSimdReal x0, x1, x2;
         simdLoadRvecs(x, a, &x0, &x1, &x2);
 
@@ -755,7 +760,8 @@ static void do_update_md(int                                  start,
                                                                                        : zero;
 
         dispatchTemplatedFunction(
-                [=](auto stepAccelerationType) {
+                [=](auto stepAccelerationType)
+                {
                     return updateMDLeapfrogGeneral<stepAccelerationType>(start,
                                                                          nrend,
                                                                          doNoseHoover,
@@ -806,7 +812,8 @@ static void do_update_md(int                                  start,
             };
 
             dispatchTemplatedFunction(
-                    [=](auto numTempScaleValues, auto parrinelloRahmanVelocityScaling) {
+                    [=](auto numTempScaleValues, auto parrinelloRahmanVelocityScaling)
+                    {
                         return updateMDLeapfrogSimple<StoreUpdatedVelocities::Yes, numTempScaleValues, parrinelloRahmanVelocityScaling>(
                                 start, nrend, dt, dtPressureCouple, invMassPerDim, tcstat, cTC, diagM, x, xprime, v, f);
                     },
@@ -836,7 +843,8 @@ static void do_update_md(int                                  start,
             else
             {
                 dispatchTemplatedFunction(
-                        [=](auto numTempScaleValues) {
+                        [=](auto numTempScaleValues)
+                        {
                             /* Note that modern compilers are pretty good at vectorizing
                              * updateMDLeapfrogSimple(). But the SIMD version will still
                              * be faster because invMass lowers the cache pressure
@@ -1029,8 +1037,7 @@ gmx_stochd_t::gmx_stochd_t(const t_inputrec& inputRecord)
         for (int gt = 0; gt < ngtc; gt++)
         {
             real reft = std::max<real>(0, opts->ref_t[gt]);
-            if ((opts->tau_t[gt] > 0)
-                && (reft > 0)) /* tau_t or ref_t = 0 means that no randomization is done */
+            if ((opts->tau_t[gt] > 0) && (reft > 0)) /* tau_t or ref_t = 0 means that no randomization is done */
             {
                 randomize_group[gt] = true;
                 boltzfac[gt]        = gmx::c_boltz * opts->ref_t[gt];

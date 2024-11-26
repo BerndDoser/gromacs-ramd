@@ -37,10 +37,18 @@
 
 #include "config.h"
 
+#include <string>
+
 #include <gtest/gtest.h>
+
+#include "gromacs/hardware/hw_info.h"
 
 #include "threadaffinitytest.h"
 
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
@@ -199,3 +207,5 @@ TEST_F(ThreadAffinityTest, HandlesPinningFailureWithOneThreadFailing)
 #endif
 
 } // namespace
+} // namespace test
+} // namespace gmx

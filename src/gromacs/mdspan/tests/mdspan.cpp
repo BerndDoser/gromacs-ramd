@@ -86,13 +86,23 @@
 
 #include "gromacs/mdspan/mdspan.h"
 
+#include <cstddef>
 #include <cstdio>
+
+#include <array>
+#include <string>
+#include <vector>
 
 #include <gtest/gtest.h>
 
+#include "gromacs/mdspan/accessor_policy.h"
+#include "gromacs/mdspan/extents.h"
+#include "gromacs/mdspan/layouts.h"
+
 namespace gmx
 {
-
+namespace test
+{
 namespace
 {
 
@@ -320,5 +330,5 @@ TYPED_TEST(MdSpanTest, Operator)
 }
 
 } // namespace
-
+} // namespace test
 } // namespace gmx

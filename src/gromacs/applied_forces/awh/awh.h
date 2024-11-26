@@ -62,6 +62,7 @@
 #ifndef GMX_AWH_H
 #define GMX_AWH_H
 
+#include <cstdint>
 #include <cstdio>
 
 #include <memory>
@@ -70,6 +71,7 @@
 
 #include "gromacs/math/vectypes.h"
 #include "gromacs/utility/basedefinitions.h"
+#include "gromacs/utility/real.h"
 
 struct gmx_multisim_t;
 struct gmx_wallcycle;
@@ -143,7 +145,7 @@ public:
 
     ~Awh();
 
-    /*! \brief Peform an AWH update, to be called every MD step.
+    /*! \brief Perform an AWH update, to be called every MD step.
      *
      * An update has two tasks: apply the bias force and improve
      * the bias and the free energy estimate that AWH keeps internally.

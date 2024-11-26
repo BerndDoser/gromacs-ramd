@@ -45,15 +45,20 @@
 #include "pairs.h"
 
 #include <cmath>
+#include <cstdint>
+#include <cstdio>
+
+#include <filesystem>
+#include <memory>
 
 #include "gromacs/listed_forces/bonded.h"
 #include "gromacs/math/functions.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/mdtypes/enerdata.h"
 #include "gromacs/mdtypes/forcerec.h"
 #include "gromacs/mdtypes/group.h"
 #include "gromacs/mdtypes/interaction_const.h"
 #include "gromacs/mdtypes/md_enums.h"
-#include "gromacs/mdtypes/nblist.h"
 #include "gromacs/mdtypes/simulation_workload.h"
 #include "gromacs/pbcutil/ishift.h"
 #include "gromacs/pbcutil/pbc.h"
@@ -62,7 +67,11 @@
 #include "gromacs/simd/simd_math.h"
 #include "gromacs/simd/vector_operations.h"
 #include "gromacs/tables/forcetable.h"
+#include "gromacs/topology/idef.h"
+#include "gromacs/utility/alignedallocator.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/basedefinitions.h"
+#include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/gmxassert.h"
 
@@ -240,7 +249,6 @@ static real free_energy_evaluate_single(real                                    
             }
             sigma_pow[i] = sigma6[i];
         }
-        // NOLINTNEXTLINE(readability-misleading-indentation) remove when clang-tidy-13 is required
         if constexpr (softcoreType == KernelSoftcoreType::Gapsys)
         {
             if ((c6[i] > 0) && (c12[i] > 0))
@@ -257,7 +265,6 @@ static real free_energy_evaluate_single(real                                    
         }
     }
 
-    // NOLINTNEXTLINE(readability-misleading-indentation) remove when clang-tidy-13 is required
     if constexpr (softcoreType == KernelSoftcoreType::Beutler)
     {
         /* only use softcore if one of the states has a zero endstate - softcore is for avoiding infinities!*/
@@ -272,7 +279,6 @@ static real free_energy_evaluate_single(real                                    
             alpha_coul_eff = scParams.alphaCoulomb;
         }
     }
-    // NOLINTNEXTLINE(readability-misleading-indentation) remove when clang-tidy-13 is required
     if constexpr (softcoreType == KernelSoftcoreType::Gapsys)
     {
         /* only use softcore if one of the states has a zero endstate - softcore is for avoiding infinities!*/
@@ -289,7 +295,6 @@ static real free_energy_evaluate_single(real                                    
     }
 
     /* Loop over A and B states again */
-    // NOLINTNEXTLINE(readability-misleading-indentation) remove when clang-tidy-13 is required
     for (i = 0; i < 2; i++)
     {
         fscal_elec[i] = 0;
@@ -316,7 +321,6 @@ static real free_energy_evaluate_single(real                                    
                 r_coul = r;
             }
 
-            // NOLINTNEXTLINE(readability-misleading-indentation) remove when clang-tidy-13 is required
             if constexpr (softcoreType == KernelSoftcoreType::Gapsys)
             {
                 if ((facel != 0) && (LFC[i] < 1))
@@ -336,7 +340,6 @@ static real free_energy_evaluate_single(real                                    
                 }
             }
 
-            // NOLINTNEXTLINE(readability-misleading-indentation) remove when clang-tidy-13 is required
             if ((softcoreType == KernelSoftcoreType::Gapsys) && (r < rQ))
             {
                 real rInvQ    = one / rQ;
@@ -401,7 +404,6 @@ static real free_energy_evaluate_single(real                                    
                 }
             }
 
-            // NOLINTNEXTLINE(readability-misleading-indentation) remove when clang-tidy-13 is required
             if ((softcoreType == KernelSoftcoreType::Gapsys) && (r < rLJ))
             {
                 // scaled values for c6 and c12
@@ -492,7 +494,6 @@ static real free_energy_evaluate_single(real                                    
             dvdl_coul_sum += dvdl_elec[i];
             dvdl_vdw_sum += dvdl_vdw[i];
         }
-        // NOLINTNEXTLINE(readability-misleading-indentation) remove when clang-tidy-13 is required
         dvdl_coul_sum += velec[i] * DLF[i];
         dvdl_vdw_sum += vvdw[i] * DLF[i];
         if constexpr (softcoreType == KernelSoftcoreType::Beutler)

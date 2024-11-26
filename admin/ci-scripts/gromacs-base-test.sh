@@ -27,9 +27,19 @@ if grep -qF 'NVIDIA' <<< "$GPU_VENDOR"; then
             echo "    with PME decomposition"
         fi
     fi
+    if [[ "$GMX_ENABLE_NVSHMEM" != "" ]] && [[ "$GPU_COUNT" -eq "2" ]]
+    then
+        # In CI with dual GPUs NVSHMEM cannot support more than 2 MPI processes/GPU
+        # which happens in multi sim tests so we disable them
+        echo "Disabling MdrunMultiSim tests as with GMX_ENABLE_NVSHMEM it does not work on dual GPU setup without MPS"
+        EXTRA_FLAGS="--exclude-regex MdrunMultiSim "
+    fi
+    # Speed up device re-initialization, especially when running multiple tests in parallel
+    export CUDA_DEVICE_MAX_CONNECTIONS=2  # default is 8
 fi
 if grep -qF 'AMD' <<< "$GPU_VENDOR"; then
     clinfo -l || true;
+    rocm-smi || true;
 fi
 if grep -qF 'INTEL' <<< "$GPU_VENDOR"; then
     sycl-ls || true;
@@ -39,7 +49,7 @@ LABEL_REGEX=
 if [[ -n "$GMX_TEST_LABELS" ]] ; then
     LABEL_REGEX="--label-regex $GMX_TEST_LABELS"
 fi
-ctest -D $CTEST_RUN_MODE $LABEL_REGEX $EXTRA_FLAGS --output-on-failure | tee ctestLog.log || true
+ctest -D $CTEST_RUN_MODE $LABEL_REGEX $EXTRA_FLAGS --parallel $KUBERNETES_CPU_LIMIT --output-on-failure | tee ctestLog.log || true
 
 EXITCODE=$?
 

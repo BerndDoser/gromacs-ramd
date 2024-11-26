@@ -42,10 +42,16 @@
 
 #include "gromacs/onlinehelp/helpformat.h"
 
+#include <string>
+
 #include <gtest/gtest.h>
 
 #include "testutils/stringtest.h"
 
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
@@ -192,3 +198,5 @@ TEST_F(TextTableFormatterTest, HandlesEmptyColumns)
 }
 
 } // namespace
+} // namespace test
+} // namespace gmx

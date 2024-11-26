@@ -41,6 +41,14 @@
  */
 #include "gmxpre.h"
 
+#include <filesystem>
+#include <string>
+
+#include <gtest/gtest.h>
+
+#include "testutils/cmdlinetest.h"
+#include "testutils/testfilemanager.h"
+
 #include "moduletest.h"
 
 namespace gmx
@@ -48,22 +56,9 @@ namespace gmx
 namespace test
 {
 
-class SwapTestFixture : public MdrunTestFixture
+class CompelTest : public MdrunTestFixture
 {
-protected:
-    SwapTestFixture();
-    ~SwapTestFixture() override;
 };
-
-
-SwapTestFixture::SwapTestFixture() {}
-
-SwapTestFixture::~SwapTestFixture() {}
-
-
-//! Test fixture for mdrun with "Computational Electrophysiology" settings,
-// i.e. double membrane sandwich with ion/water exchange protocol
-typedef gmx::test::SwapTestFixture CompelTest;
 
 /* This test ensures that the compel protocol can be run, that all of
  * the swapcoords parameters from the .mdp file are understood, and that

@@ -46,15 +46,19 @@
 #include <cstring>
 
 #include <algorithm>
+#include <iterator>
 #include <numeric>
 #include <string>
 #include <vector>
 
+#include "gromacs/topology/atoms.h"
 #include "gromacs/topology/block.h"
 #include "gromacs/topology/index.h"
 #include "gromacs/topology/mtop_lookup.h"
 #include "gromacs/topology/mtop_util.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/smalloc.h"
@@ -71,10 +75,10 @@ IndexGroupsAndNames::IndexGroupsAndNames(gmx::ArrayRef<const IndexGroup> indexGr
 
 bool IndexGroupsAndNames::containsGroupName(const std::string& groupName) const
 {
-    return std::any_of(
-            std::begin(indexGroups_), std::end(indexGroups_), [&groupName](const IndexGroup& indexGroup) {
-                return equalCaseInsensitive(groupName, indexGroup.name);
-            });
+    return std::any_of(std::begin(indexGroups_),
+                       std::end(indexGroups_),
+                       [&groupName](const IndexGroup& indexGroup)
+                       { return equalCaseInsensitive(groupName, indexGroup.name); });
 }
 
 std::vector<Index> IndexGroupsAndNames::indices(const std::string& groupName) const
@@ -91,10 +95,11 @@ std::vector<Index> IndexGroupsAndNames::indices(const std::string& groupName) co
                           "names, in which case you must supply an index file to the '-n' option\n"
                           "of grompp."));
     }
-    const auto groupNamePosition = std::find_if(
-            std::begin(indexGroups_), std::end(indexGroups_), [&groupName](const IndexGroup& indexGroup) {
-                return equalCaseInsensitive(groupName, indexGroup.name);
-            });
+    const auto groupNamePosition =
+            std::find_if(std::begin(indexGroups_),
+                         std::end(indexGroups_),
+                         [&groupName](const IndexGroup& indexGroup)
+                         { return equalCaseInsensitive(groupName, indexGroup.name); });
     const auto         groupIndex = std::distance(std::begin(indexGroups_), groupNamePosition);
     std::vector<Index> groupIndices(indexGroups_[groupIndex].particleIndices.begin(),
                                     indexGroups_[groupIndex].particleIndices.end());
@@ -232,7 +237,7 @@ bool gmx_ana_indexgrps_find(gmx_ana_index_t* dest, std::string* destName, gmx_an
     {
         names[i] = src->names[i].c_str();
     }
-    int n = find_group(const_cast<char*>(name), src->g.size(), const_cast<char**>(names));
+    int n = find_group(name, src->g.size(), names);
     sfree(names);
     if (n < 0)
     {

@@ -31,8 +31,6 @@
 # To help us fund GROMACS development, we humbly ask that you cite
 # the research papers on the package. Check out https://www.gromacs.org.
 
-cmake_minimum_required(VERSION 3.21.2)
-
 set(GMX_GPU_CUDA ON)
 
 option(GMX_CLANG_CUDA "Use clang for CUDA" OFF)
@@ -44,7 +42,7 @@ endif()
 set(CMAKE_CUDA_STANDARD ${CMAKE_CXX_STANDARD})
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
-find_package(CUDAToolkit ${REQUIRED_CUDA_VERSION} REQUIRED)
+find_package(CUDAToolkit ${GMX_CUDA_MINIMUM_REQUIRED_VERSION} REQUIRED)
 
 if(CUDAToolkit_VERSION GREATER_EQUAL 11.1)
   set(GMX_HAVE_GPU_GRAPH_SUPPORT ON)

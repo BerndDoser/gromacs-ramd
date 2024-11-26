@@ -38,8 +38,14 @@
 #include "config.h"
 
 #include <cassert>
+#include <cinttypes>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
+
+#include <filesystem>
+#include <optional>
+#include <string>
 
 #include "gromacs/fileio/checkpoint.h"
 #include "gromacs/fileio/confio.h"
@@ -56,16 +62,25 @@
 #include "gromacs/fileio/trrio.h"
 #include "gromacs/fileio/xdrf.h"
 #include "gromacs/fileio/xtcio.h"
+#include "gromacs/math/functions.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/topology/atoms.h"
 #include "gromacs/topology/symtab.h"
 #include "gromacs/topology/topology.h"
 #include "gromacs/trajectory/trajectoryframe.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/basedefinitions.h"
+#include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/futil.h"
 #include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/iserializer.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
+
+struct gmx_output_env_t;
 
 #if GMX_USE_PLUGINS
 #    include "gromacs/fileio/vmdio.h"
@@ -509,12 +524,12 @@ t_trxstatus* trjtools_gmx_prepare_tng_writing(const std::filesystem::path& filen
     return out;
 }
 
-void write_tng_frame(t_trxstatus* status, t_trxframe* frame)
+void write_tng_frame(t_trxstatus* status, const t_trxframe* frame)
 {
     gmx_write_tng_from_trxframe(status->tng, frame, -1);
 }
 
-int write_trxframe(t_trxstatus* status, t_trxframe* fr, gmx_conect gc)
+int write_trxframe(t_trxstatus* status, const t_trxframe* fr, gmx_conect gc)
 {
     char title[STRLEN];
     title[0] = '\0';
@@ -845,7 +860,7 @@ bool read_next_frame(const gmx_output_env_t* oenv, t_trxstatus* status, t_trxfra
         {
             case efTRR: bRet = gmx_next_frame(status, fr); break;
             case efCPT:
-                /* Checkpoint files can not contain mulitple frames */
+                /* Checkpoint files can not contain multiple frames */
                 break;
             case efG96:
             {

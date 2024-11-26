@@ -48,9 +48,11 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <utility>
 #include <vector>
 
 #include "gromacs/utility/exceptions.h"
+#include "gromacs/utility/gmxassert.h"
 
 namespace gmx
 {
@@ -102,7 +104,7 @@ void RestraintManager::Impl::add(std::shared_ptr<::gmx::IRestraintPotential> res
     restraint_.emplace_back(std::move(restraint));
 }
 
-RestraintManager::RestraintManager() : instance_(std::make_shared<RestraintManager::Impl>()){};
+RestraintManager::RestraintManager() : instance_(std::make_shared<RestraintManager::Impl>()) {};
 
 RestraintManager::~RestraintManager() = default;
 

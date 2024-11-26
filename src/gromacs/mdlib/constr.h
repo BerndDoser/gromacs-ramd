@@ -43,9 +43,11 @@
 #ifndef GMX_MDLIB_CONSTR_H
 #define GMX_MDLIB_CONSTR_H
 
+#include <cstdint>
 #include <cstdio>
 
 #include <memory>
+#include <vector>
 
 #include "gromacs/math/vectypes.h"
 #include "gromacs/topology/idef.h"
@@ -347,6 +349,9 @@ void constrain_coordinates(gmx::Constraints*         constr,
                            real*                     dhdlambda,
                            bool                      computeVirial,
                            tensor                    constraintsVirial);
+
+/*! \brief Returns True if there is at least one triangular constraint. */
+bool hasTriangleConstraints(const gmx_mtop_t& mtop, FlexibleConstraintTreatment flexibleConstraintTreatment);
 
 } // namespace gmx
 

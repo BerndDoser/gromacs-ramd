@@ -42,10 +42,16 @@
 #ifndef GMX_COORDINATIO_FRAMECONVERTERS_REGISTER_H
 #define GMX_COORDINATIO_FRAMECONVERTERS_REGISTER_H
 
+#include <memory>
+#include <utility>
 #include <vector>
 
+#include "gromacs/coordinateio/frameconverterenums.h"
 #include "gromacs/coordinateio/iframeconverter.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
+
+struct t_trxframe;
 
 namespace gmx
 {
@@ -59,9 +65,9 @@ namespace gmx
  * to ensure that input data is not modified.
  *
  * It is possible to chain different versions of this class together to have several
- * independend containers. In this case, only the outermost container will usually
+ * independent containers. In this case, only the outermost container will usually
  * own the memory, but it is possible to envision different implementations that take advantage
- * of the indivudal memory owning objects.
+ * of the individual memory owning objects.
  *
  * \inlibraryapi
  * \ingroup module_coordinatedata

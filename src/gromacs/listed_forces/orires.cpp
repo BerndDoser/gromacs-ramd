@@ -38,7 +38,15 @@
 #include <climits>
 #include <cmath>
 
+#include <algorithm>
+#include <array>
+#include <functional>
+#include <optional>
+#include <string>
+#include <vector>
+
 #include "gromacs/domdec/ga2la.h"
+#include "gromacs/domdec/localatomset.h"
 #include "gromacs/domdec/localatomsetmanager.h"
 #include "gromacs/gmxlib/network.h"
 #include "gromacs/math/do_fit.h"
@@ -53,14 +61,21 @@
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/pbcutil/ishift.h"
 #include "gromacs/pbcutil/pbc.h"
+#include "gromacs/topology/atoms.h"
+#include "gromacs/topology/forcefieldparameters.h"
+#include "gromacs/topology/idef.h"
 #include "gromacs/topology/ifunc.h"
 #include "gromacs/topology/mtop_atomloops.h"
 #include "gromacs/topology/mtop_util.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/topology/topology_enums.h"
 #include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/exceptions.h"
+#include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/pleasecite.h"
 #include "gromacs/utility/smalloc.h"
+#include "gromacs/utility/stringutil.h"
 
 using gmx::ArrayRef;
 using gmx::RVec;
@@ -649,20 +664,20 @@ real calc_orires_dev(const gmx_multisim_t* ms,
     /* Approx. 120*nfa/3 flops */
 }
 
-real orires(int             nfa,
-            const t_iatom   forceatoms[],
-            const t_iparams ip[],
-            const rvec      x[],
-            rvec4           f[],
-            rvec            fshift[],
-            const t_pbc*    pbc,
-            real gmx_unused lambda,
+real orires(int              nfa,
+            const t_iatom    forceatoms[],
+            const t_iparams  ip[],
+            const rvec       x[],
+            rvec4            f[],
+            rvec             fshift[],
+            const t_pbc*     pbc,
+            real gmx_unused  lambda,
             real gmx_unused* dvdlambda,
             gmx::ArrayRef<const real> /*charge*/,
-            t_fcdata gmx_unused* fcd,
+            t_fcdata gmx_unused*     fcd,
             t_disresdata gmx_unused* disresdata,
             t_oriresdata*            oriresdata,
-            int gmx_unused* global_atom_index)
+            int gmx_unused*          global_atom_index)
 {
     int      ex, power, ki = gmx::c_centralShiftIndex;
     real     r2, invr, invr2, fc, smooth_fc, dev, devins, pfac;

@@ -34,25 +34,39 @@
 #include "gmxpre.h"
 
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
+#include <filesystem>
+#include <string>
+
+#include "gromacs/commandline/filenm.h"
 #include "gromacs/commandline/pargs.h"
 #include "gromacs/commandline/viewit.h"
 #include "gromacs/fileio/confio.h"
+#include "gromacs/fileio/filetypes.h"
 #include "gromacs/fileio/matio.h"
+#include "gromacs/fileio/rgb.h"
 #include "gromacs/fileio/trxio.h"
 #include "gromacs/gmxana/gmx_ana.h"
+#include "gromacs/math/functions.h"
 #include "gromacs/math/units.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
+#include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/topology/index.h"
 #include "gromacs/topology/topology.h"
 #include "gromacs/utility/arraysize.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/futil.h"
 #include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
+
+struct gmx_output_env_t;
 
 int gmx_densmap(int argc, char* argv[])
 {
@@ -133,10 +147,10 @@ int gmx_densmap(int argc, char* argv[])
     gmx_output_env_t* oenv;
     const char*       label[] = { "x (nm)", "y (nm)", "z (nm)" };
     t_filenm          fnm[]   = { { efTRX, "-f", nullptr, ffREAD },
-                       { efTPS, nullptr, nullptr, ffOPTRD },
-                       { efNDX, nullptr, nullptr, ffOPTRD },
-                       { efDAT, "-od", "densmap", ffOPTWR },
-                       { efXPM, "-o", "densmap", ffWRITE } };
+                                  { efTPS, nullptr, nullptr, ffOPTRD },
+                                  { efNDX, nullptr, nullptr, ffOPTRD },
+                                  { efDAT, "-od", "densmap", ffOPTWR },
+                                  { efXPM, "-o", "densmap", ffWRITE } };
 #define NFILE asize(fnm)
     int npargs;
 

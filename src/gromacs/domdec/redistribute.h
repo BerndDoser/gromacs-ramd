@@ -41,6 +41,7 @@
 #ifndef GMX_DOMDEC_DOMDEC_REDISTRIBUTE_H
 #define GMX_DOMDEC_DOMDEC_REDISTRIBUTE_H
 
+#include <cstdint>
 #include <cstdio>
 
 #include "gromacs/math/vectypes.h"
@@ -51,14 +52,13 @@ struct t_forcerec;
 struct t_nrnb;
 class t_state;
 
-/*! \brief Redistribute the atoms to their, new, local domains */
+//! Redistribute the atoms to their, new, local domains
 void dd_redistribute_cg(FILE*         fplog,
                         int64_t       step,
                         gmx_domdec_t* dd,
                         ivec          tric_dir,
                         t_state*      state,
                         t_forcerec*   fr,
-                        t_nrnb*       nrnb,
-                        int*          ncg_moved);
+                        t_nrnb*       nrnb);
 
 #endif

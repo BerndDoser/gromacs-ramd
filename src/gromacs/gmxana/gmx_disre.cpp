@@ -34,19 +34,27 @@
 #include "gmxpre.h"
 
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
 #include <algorithm>
+#include <array>
+#include <filesystem>
+#include <memory>
 #include <optional>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
+#include "gromacs/commandline/filenm.h"
 #include "gromacs/commandline/pargs.h"
 #include "gromacs/commandline/viewit.h"
 #include "gromacs/fileio/confio.h"
+#include "gromacs/fileio/filetypes.h"
 #include "gromacs/fileio/matio.h"
 #include "gromacs/fileio/pdbio.h"
+#include "gromacs/fileio/rgb.h"
 #include "gromacs/fileio/tpxio.h"
 #include "gromacs/fileio/trxio.h"
 #include "gromacs/fileio/xvgr.h"
@@ -56,6 +64,7 @@
 #include "gromacs/math/do_fit.h"
 #include "gromacs/math/functions.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/mdlib/force.h"
 #include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdtypes/commrec.h"
@@ -66,15 +75,24 @@
 #include "gromacs/pbcutil/ishift.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/pbcutil/rmpbc.h"
+#include "gromacs/topology/atoms.h"
+#include "gromacs/topology/idef.h"
+#include "gromacs/topology/ifunc.h"
 #include "gromacs/topology/index.h"
 #include "gromacs/topology/mtop_util.h"
 #include "gromacs/topology/topology.h"
 #include "gromacs/trajectoryanalysis/topologyinformation.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/arraysize.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/futil.h"
+#include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/stringutil.h"
+
+struct gmx_output_env_t;
 
 typedef struct
 {
@@ -424,9 +442,9 @@ static void dump_stats(FILE*                          log,
     dump_viol(log, dd.nres, drs, FALSE);
 
     fprintf(log, "+++ Sorted by linear averaged violations: +++\n");
-    std::sort(drs, drs + dd.nres, [](const t_dr_stats& a, const t_dr_stats& b) {
-        return a.viol > b.viol;
-    }); // Reverse sort
+    std::sort(drs,
+              drs + dd.nres,
+              [](const t_dr_stats& a, const t_dr_stats& b) { return a.viol > b.viol; }); // Reverse sort
     dump_viol(log, dd.nres, drs, TRUE);
 
     dump_dump(log, dd.nres, drs);
@@ -715,22 +733,22 @@ int gmx_disre(int argc, char* argv[])
     static gmx_bool bThird  = TRUE;
     t_pargs         pa[]    = {
         { "-ntop",
-          FALSE,
-          etINT,
-          { &ntoppar },
-          "Number of large violations that are stored in the log file every step" },
+                     FALSE,
+                     etINT,
+                     { &ntoppar },
+                     "Number of large violations that are stored in the log file every step" },
         { "-maxdr",
-          FALSE,
-          etREAL,
-          { &max_dr },
-          "Maximum distance violation in matrix output. If less than or equal to 0 the "
-          "maximum will be determined by the data." },
+                     FALSE,
+                     etREAL,
+                     { &max_dr },
+                     "Maximum distance violation in matrix output. If less than or equal to 0 the "
+                                "maximum will be determined by the data." },
         { "-nlevels", FALSE, etINT, { &nlevels }, "Number of levels in the matrix output" },
         { "-third",
-          FALSE,
-          etBOOL,
-          { &bThird },
-          "Use inverse third power averaging or linear for matrix output" }
+                     FALSE,
+                     etBOOL,
+                     { &bThird },
+                     "Use inverse third power averaging or linear for matrix output" }
     };
 
     FILE *       out = nullptr, *aver = nullptr, *numv = nullptr, *maxxv = nullptr, *xvg = nullptr;

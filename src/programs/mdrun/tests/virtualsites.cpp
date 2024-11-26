@@ -65,14 +65,35 @@
 
 #include "config.h"
 
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+
+#include <array>
+#include <string>
+#include <tuple>
+#include <utility>
+#include <vector>
+
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
+
+#include "gromacs/math/vectypes.h"
 #include "gromacs/topology/idef.h"
 #include "gromacs/topology/ifunc.h"
+#include "gromacs/topology/topology.h"
+#include "gromacs/trajectory/trajectoryframe.h"
 #include "gromacs/trajectoryanalysis/topologyinformation.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/exceptions.h"
+#include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/strconvert.h"
 #include "gromacs/utility/stringutil.h"
 
 #include "testutils/mpitest.h"
 #include "testutils/simulationdatabase.h"
+#include "testutils/testasserts.h"
 #include "testutils/testmatchers.h"
 #include "testutils/trajectoryreader.h"
 
@@ -159,9 +180,9 @@ public:
         SCOPED_TRACE("Checking virtual site reference implementation.");
         // Randomly generated real atom positions and velocities
         std::vector<RVec> startPositions     = { { 2.641321, 2.076298, 2.138602 },
-                                             { 3.776765, 3.154901, 1.556379 },
-                                             { 2.376669, 1.166706, 2.457044 },
-                                             { 3.242320, 2.142465, 2.023578 } };
+                                                 { 3.776765, 3.154901, 1.556379 },
+                                                 { 2.376669, 1.166706, 2.457044 },
+                                                 { 3.242320, 2.142465, 2.023578 } };
         std::vector<RVec> halfStepVelocities = { { 0.154667, 0.319010, 0.458749 },
                                                  { -0.010590, -0.191858, -0.096820 },
                                                  { -0.008609, 0.004656, 0.448852 },

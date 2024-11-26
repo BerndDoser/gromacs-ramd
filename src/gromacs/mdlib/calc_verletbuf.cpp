@@ -35,11 +35,22 @@
 
 #include "calc_verletbuf.h"
 
+#include "config.h"
+
 #include <cmath>
+#include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 
 #include <algorithm>
+#include <filesystem>
+#include <functional>
+#include <string>
+#include <tuple>
+#include <typeindex>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include "gromacs/ewald/ewald_utils.h"
 #include "gromacs/gmxlib/network.h"
@@ -50,11 +61,18 @@
 #include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/mdtypes/multipletimestepping.h"
 #include "gromacs/nbnxm/nbnxm.h"
+#include "gromacs/nbnxm/nbnxm_enums.h"
 #include "gromacs/nbnxm/nbnxm_geometry.h"
 #include "gromacs/nbnxm/nbnxm_simd.h"
+#include "gromacs/pbcutil/pbc.h"
+#include "gromacs/topology/atoms.h"
 #include "gromacs/topology/block.h"
+#include "gromacs/topology/forcefieldparameters.h"
+#include "gromacs/topology/idef.h"
 #include "gromacs/topology/ifunc.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/topology/topology_enums.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/real.h"
 #include "gromacs/utility/strconvert.h"
@@ -113,15 +131,26 @@ struct pot_derivatives_t
     real md3; // -V''' at the cutoff
 };
 
-VerletbufListSetup verletbufGetListSetup(Nbnxm::KernelType nbnxnKernelType)
+VerletbufListSetup verletbufGetListSetup(gmx::NbnxmKernelType nbnxnKernelType)
 {
     /* Note that the current buffer estimation code only handles clusters
      * of size 1, 2 or 4, so for 4x8 or 8x8 we use the estimate for 4x4.
      */
     VerletbufListSetup listSetup;
 
-    listSetup.cluster_size_i = Nbnxm::sc_iClusterSize(nbnxnKernelType);
-    listSetup.cluster_size_j = Nbnxm::sc_jClusterSize(nbnxnKernelType);
+    if (nbnxnKernelType == gmx::NbnxmKernelType::Gpu8x8x8)
+    {
+        // Use the default GPU 8x8x8 pairlist layout here, as the results are
+        // identical for anything above a cluster size of 4. This is asserted on later
+        // in mdrunner.cpp
+        listSetup.cluster_size_i = gmx::sc_gpuClusterSize(gmx::PairlistType::Hierarchical8x8x8);
+        listSetup.cluster_size_j = gmx::sc_gpuClusterSize(gmx::PairlistType::Hierarchical8x8x8);
+    }
+    else
+    {
+        listSetup.cluster_size_i = sc_iClusterSize(nbnxnKernelType);
+        listSetup.cluster_size_j = sc_jClusterSize(nbnxnKernelType);
+    }
 
     return listSetup;
 }
@@ -133,23 +162,23 @@ VerletbufListSetup verletbufGetSafeListSetup(ListSetupType listType)
      * i- and j-cluster sizes, so we potentially overestimate, but never
      * underestimate, the buffer drift.
      */
-    Nbnxm::KernelType nbnxnKernelType;
+    gmx::NbnxmKernelType nbnxnKernelType;
 
     if (listType == ListSetupType::Gpu)
     {
-        nbnxnKernelType = Nbnxm::KernelType::Gpu8x8x8;
+        nbnxnKernelType = gmx::NbnxmKernelType::Gpu8x8x8;
     }
 #if GMX_SIMD && GMX_USE_SIMD_KERNELS
     else if (listType == ListSetupType::CpuSimdWhenSupported)
     {
         /* We use the smallest cluster size to be on the safe side */
-        nbnxnKernelType = (sc_haveNbnxmSimd2xmmKernels ? Nbnxm::KernelType::Cpu4xN_Simd_2xNN
-                                                       : Nbnxm::KernelType::Cpu4xN_Simd_4xN);
+        nbnxnKernelType = (sc_haveNbnxmSimd2xmmKernels ? gmx::NbnxmKernelType::Cpu4xN_Simd_2xNN
+                                                       : gmx::NbnxmKernelType::Cpu4xN_Simd_4xN);
     }
 #endif
     else
     {
-        nbnxnKernelType = Nbnxm::KernelType::Cpu4x4_PlainC;
+        nbnxnKernelType = gmx::NbnxmKernelType::Cpu4x4_PlainC;
     }
 
     return verletbufGetListSetup(nbnxnKernelType);
@@ -1046,7 +1075,7 @@ static pot_derivatives_t getElecDerivatives(const t_inputrec& ir)
 
 /* Returns the variance of the atomic displacement over timePeriod.
  *
- * Note: When not using BD with a non-mass dependendent friction coefficient,
+ * Note: When not using BD with a non-mass dependent friction coefficient,
  *       the return value still needs to be divided by the particle mass.
  */
 static real displacementVariance(const t_inputrec& ir, real temperature, real timePeriod)
@@ -1108,6 +1137,8 @@ static real computeEffectiveAtomDensity(gmx::ArrayRef<const gmx::RVec> coordinat
                                         const real                     cutoff)
 {
     GMX_RELEASE_ASSERT(!coordinates.empty(), "Need coordinates to compute a density");
+    GMX_RELEASE_ASSERT(cutoff > 0,
+                       "The cutoff must be > 0 when computing the effective atom density");
 
     gmx::IVec numCells;
     gmx::RVec invCellSize;
@@ -1452,7 +1483,7 @@ real calcVerletBufferSize(const gmx_mtop_t&         mtop,
                                            mtop.ffparams,
                                            ir,
                                            ensembleTemperature,
-                                           { ljDisp, ljRep },
+                                                           { ljDisp, ljRep },
                                            listIsDynamicallyPruned,
                                            nstlist,
                                            rl,

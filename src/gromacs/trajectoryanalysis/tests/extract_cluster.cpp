@@ -42,10 +42,14 @@
 
 #include "gromacs/trajectoryanalysis/modules/extract_cluster.h"
 
+#include <array>
 #include <filesystem>
+#include <string>
 
 #include <gtest/gtest.h>
 
+#include "gromacs/trajectoryanalysis/analysismodule.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/path.h"
 #include "gromacs/utility/stringutil.h"
 
@@ -120,7 +124,7 @@ ExtractClusterModuleTest::ExtractClusterModuleTest()
         generatedFile.filename = gmx::concatenateBeforeExtension(
                                          "test.g96", gmx::formatString("_Cluster_000%d", fileNumber))
                                          .string();
-        generatedFile.matcher      = TextFileMatch(ExactTextMatch()).createFileMatcher();
+        generatedFile.matcher = TextFileMatch(ExactTextMatch()).createFileMatcher();
         generatedFile.fullFilepath = fileManager().getTemporaryFilePath(generatedFile.filename).string();
         fileNumber++;
     }

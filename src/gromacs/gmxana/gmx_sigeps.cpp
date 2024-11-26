@@ -36,13 +36,24 @@
 #include <cmath>
 #include <cstdio>
 
+#include <array>
+#include <filesystem>
+#include <string>
+
+#include "gromacs/commandline/filenm.h"
 #include "gromacs/commandline/pargs.h"
 #include "gromacs/commandline/viewit.h"
+#include "gromacs/fileio/filetypes.h"
 #include "gromacs/fileio/xvgr.h"
 #include "gromacs/gmxana/gmx_ana.h"
 #include "gromacs/math/functions.h"
 #include "gromacs/math/units.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/arraysize.h"
+#include "gromacs/utility/basedefinitions.h"
+#include "gromacs/utility/real.h"
+
+struct gmx_output_env_t;
 
 static real pot(real x, real qq, real c6, real cn, int npow)
 {
@@ -72,20 +83,20 @@ int gmx_sigeps(int argc, char* argv[])
     static real       Abh = 1e5, Bbh = 32, Cbh = 1e-3;
     static int        npow  = 12;
     t_pargs           pa[]  = { { "-c6", FALSE, etREAL, { &c6 }, "C6" },
-                     { "-cn", FALSE, etREAL, { &cn }, "Constant for repulsion" },
-                     { "-pow", FALSE, etINT, { &npow }, "Power of the repulsion term" },
-                     { "-sig", FALSE, etREAL, { &sig }, "[GRK]sigma[grk]" },
-                     { "-eps", FALSE, etREAL, { &eps }, "[GRK]epsilon[grk]" },
-                     { "-A", FALSE, etREAL, { &Abh }, "Buckingham A" },
-                     { "-B", FALSE, etREAL, { &Bbh }, "Buckingham B" },
-                     { "-C", FALSE, etREAL, { &Cbh }, "Buckingham C" },
-                     { "-qi", FALSE, etREAL, { &qi }, "qi" },
-                     { "-qj", FALSE, etREAL, { &qj }, "qj" },
-                     { "-sigfac",
-                       FALSE,
-                       etREAL,
-                       { &sigfac },
-                       "Factor in front of [GRK]sigma[grk] for starting the plot" } };
+                                { "-cn", FALSE, etREAL, { &cn }, "Constant for repulsion" },
+                                { "-pow", FALSE, etINT, { &npow }, "Power of the repulsion term" },
+                                { "-sig", FALSE, etREAL, { &sig }, "[GRK]sigma[grk]" },
+                                { "-eps", FALSE, etREAL, { &eps }, "[GRK]epsilon[grk]" },
+                                { "-A", FALSE, etREAL, { &Abh }, "Buckingham A" },
+                                { "-B", FALSE, etREAL, { &Bbh }, "Buckingham B" },
+                                { "-C", FALSE, etREAL, { &Cbh }, "Buckingham C" },
+                                { "-qi", FALSE, etREAL, { &qi }, "qi" },
+                                { "-qj", FALSE, etREAL, { &qj }, "qj" },
+                                { "-sigfac",
+                                  FALSE,
+                                  etREAL,
+                                  { &sigfac },
+                                  "Factor in front of [GRK]sigma[grk] for starting the plot" } };
     t_filenm          fnm[] = { { efXVG, "-o", "potje", ffWRITE } };
     gmx_output_env_t* oenv;
 #define NFILE asize(fnm)

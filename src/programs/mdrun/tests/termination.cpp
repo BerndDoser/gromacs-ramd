@@ -47,12 +47,20 @@
  */
 #include "gmxpre.h"
 
+#include <cstdio>
+#include <cstdlib>
+
+#include <filesystem>
+#include <string>
+
 #include <gtest/gtest.h>
 
+#include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/path.h"
 #include "gromacs/utility/stringutil.h"
 #include "gromacs/utility/textreader.h"
 
+#include "testutils/cmdlinetest.h"
 #include "testutils/testasserts.h"
 #include "testutils/testfilemanager.h"
 
@@ -113,6 +121,12 @@ TEST_F(MdrunTerminationTest, CheckpointRestartAppendsByDefault)
 
 TEST_F(MdrunTerminationTest, WritesCheckpointAfterMaxhTerminationAndThenRestarts)
 {
+    if (std::getenv("GMX_CUDA_GRAPH") != nullptr)
+    {
+        // See https://gitlab.com/gromacs/gromacs/-/issues/5162
+        GTEST_SKIP() << "Test is unstable with CUDA graphs";
+    }
+
     runner_.useTopGroAndNdxFromDatabase("spc2");
     organizeMdpFile(&runner_, 100);
     EXPECT_EQ(0, runner_.callGrompp());

@@ -43,6 +43,8 @@
 #include "gromacs/topology/mtop_util.h"
 #include "gromacs/utility/exceptions.h"
 
+struct gmx_mtop_t;
+
 namespace gmx
 {
 
@@ -110,6 +112,16 @@ const t_commrec* ColvarsSimulationsParameters::comm() const
         GMX_THROW(InternalError("Communication record not set for Colvars simulation."));
     }
     return cr_;
+}
+
+void ColvarsSimulationsParameters::setMultisim(const gmx_multisim_t* ms)
+{
+    ms_ = ms;
+}
+
+const gmx_multisim_t* ColvarsSimulationsParameters::ms() const
+{
+    return ms_;
 }
 
 

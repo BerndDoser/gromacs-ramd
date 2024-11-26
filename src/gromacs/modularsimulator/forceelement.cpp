@@ -72,7 +72,6 @@ struct gmx_edsam;
 struct gmx_enfrot;
 struct gmx_multisim_t;
 class history_t;
-struct MDModulesNotifiers;
 
 namespace gmx
 {
@@ -163,16 +162,18 @@ void ForceElement::scheduleTask(Step step, Time time, const RegisterRunFunction&
              | (nextFreeEnergyCalculationStep_ == step ? GMX_FORCE_DHDL : 0)
              | (nextNSStep_ == step ? GMX_FORCE_NS : 0));
 
-    registerRunFunction([this, step, time, flags]() {
-        if (doShellFC_)
-        {
-            run<true>(step, time, flags);
-        }
-        else
-        {
-            run<false>(step, time, flags);
-        }
-    });
+    registerRunFunction(
+            [this, step, time, flags]()
+            {
+                if (doShellFC_)
+                {
+                    run<true>(step, time, flags);
+                }
+                else
+                {
+                    run<false>(step, time, flags);
+                }
+            });
 }
 
 void ForceElement::elementSetup()

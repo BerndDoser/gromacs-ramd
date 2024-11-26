@@ -42,6 +42,9 @@
 
 #include "freeenergyperturbationdata.h"
 
+#include <algorithm>
+#include <functional>
+
 #include "gromacs/domdec/domdec_network.h"
 #include "gromacs/mdlib/freeenergyparameters.h"
 #include "gromacs/mdlib/md_support.h"
@@ -50,14 +53,20 @@
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/mdatom.h"
+#include "gromacs/mdtypes/observablesreducer.h"
 #include "gromacs/mdtypes/state.h"
+#include "gromacs/modularsimulator/modularsimulatorinterfaces.h"
 #include "gromacs/trajectory/trajectoryframe.h"
+#include "gromacs/utility/basedefinitions.h"
+#include "gromacs/utility/gmxassert.h"
 
 #include "modularsimulator.h"
 #include "simulatoralgorithm.h"
 
 namespace gmx
 {
+template<CheckpointDataOperation operation>
+class CheckpointData;
 
 FreeEnergyPerturbationData::FreeEnergyPerturbationData(FILE*             fplog,
                                                        const t_inputrec& inputrec,
@@ -85,8 +94,8 @@ FreeEnergyPerturbationData::FreeEnergyPerturbationData(FILE*             fplog,
                        lambda_);
 }
 
-void FreeEnergyPerturbationData::Element::scheduleTask(Step                       step,
-                                                       Time gmx_unused            time,
+void FreeEnergyPerturbationData::Element::scheduleTask(Step            step,
+                                                       Time gmx_unused time,
                                                        const RegisterRunFunction& registerRunFunction)
 {
     // If we do slow growth, we update lambda every step
@@ -102,11 +111,13 @@ void FreeEnergyPerturbationData::Element::scheduleTask(Step                     
     }
     else if (needToSetExternalState)
     {
-        registerRunFunction([this, step]() {
-            GMX_ASSERT(step == externalFepStateSetting_->newFepStateStep,
-                       "FEP state setting step mismatch");
-            freeEnergyPerturbationData_->setLambdaState(step, externalFepStateSetting_->newFepState);
-        });
+        registerRunFunction(
+                [this, step]()
+                {
+                    GMX_ASSERT(step == externalFepStateSetting_->newFepStateStep,
+                               "FEP state setting step mismatch");
+                    freeEnergyPerturbationData_->setLambdaState(step, externalFepStateSetting_->newFepState);
+                });
     }
 }
 
@@ -198,7 +209,7 @@ void FreeEnergyPerturbationData::Element::doCheckpointData(CheckpointData<operat
                 externalFepStateSetting_ = FepStateSetting();
             }
         }
-        if (externalFepStateSetting_.has_value()) // NOLINT(readability-misleading-indentation)
+        if (externalFepStateSetting_.has_value())
         {
             checkpointData->scalar("Requested new FEP state", &externalFepStateSetting_->newFepState);
             checkpointData->scalar("Step at which new FEP state is applied",
@@ -208,7 +219,7 @@ void FreeEnergyPerturbationData::Element::doCheckpointData(CheckpointData<operat
 }
 
 void FreeEnergyPerturbationData::Element::saveCheckpointState(std::optional<WriteCheckpointData> checkpointData,
-                                                              const t_commrec*                   cr)
+                                                              const t_commrec* cr)
 {
     if (MAIN(cr))
     {
@@ -265,7 +276,7 @@ DomDecCallback FreeEnergyPerturbationData::Element::registerDomDecCallback()
 }
 
 FreeEnergyPerturbationData::Element::Element(FreeEnergyPerturbationData* freeEnergyPerturbationElement,
-                                             double                      deltaLambda) :
+                                             double deltaLambda) :
     freeEnergyPerturbationData_(freeEnergyPerturbationElement),
     doSlowGrowth_(deltaLambda != 0),
     numExternalFepStateSettingClients_(0),
@@ -318,12 +329,12 @@ void FepStateSetting::setNewState(int state, Step step)
 }
 
 ISimulatorElement* FreeEnergyPerturbationData::Element::getElementPointerImpl(
-        LegacySimulatorData gmx_unused*        legacySimulatorData,
+        LegacySimulatorData gmx_unused*                    legacySimulatorData,
         ModularSimulatorAlgorithmBuilderHelper gmx_unused* builderHelper,
-        StatePropagatorData gmx_unused* statePropagatorData,
-        EnergyData gmx_unused*      energyData,
-        FreeEnergyPerturbationData* freeEnergyPerturbationData,
-        GlobalCommunicationHelper gmx_unused* globalCommunicationHelper)
+        StatePropagatorData gmx_unused*                    statePropagatorData,
+        EnergyData gmx_unused*                             energyData,
+        FreeEnergyPerturbationData*                        freeEnergyPerturbationData,
+        GlobalCommunicationHelper gmx_unused*              globalCommunicationHelper)
 {
     return freeEnergyPerturbationData->element();
 }

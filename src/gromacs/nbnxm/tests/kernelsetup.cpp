@@ -40,7 +40,12 @@
  */
 #include "gmxpre.h"
 
+#include <string>
+
+#include <gtest/gtest.h>
+
 #include "gromacs/mdtypes/md_enums.h"
+#include "gromacs/nbnxm/atomdata.h"
 #include "gromacs/nbnxm/kernel_common.h"
 #include "gromacs/nbnxm/nbnxm.h"
 
@@ -57,43 +62,43 @@ namespace
 
 TEST(KernelSetupTest, getCoulombKernelTypeRF)
 {
-    EXPECT_EQ(getCoulombKernelType(Nbnxm::EwaldExclusionType::NotSet, CoulombInteractionType::RF, false),
+    EXPECT_EQ(getCoulombKernelType(gmx::EwaldExclusionType::NotSet, CoulombInteractionType::RF, false),
               CoulombKernelType::ReactionField);
 }
 
 TEST(KernelSetupTest, getCoulombKernelTypeCut)
 {
-    EXPECT_EQ(getCoulombKernelType(Nbnxm::EwaldExclusionType::NotSet, CoulombInteractionType::Cut, false),
+    EXPECT_EQ(getCoulombKernelType(gmx::EwaldExclusionType::NotSet, CoulombInteractionType::Cut, false),
               CoulombKernelType::ReactionField);
 }
 
 TEST(KernelSetupTest, getCoulombKernelTypeTable)
 {
-    EXPECT_EQ(getCoulombKernelType(Nbnxm::EwaldExclusionType::Table, CoulombInteractionType::Count, true),
+    EXPECT_EQ(getCoulombKernelType(gmx::EwaldExclusionType::Table, CoulombInteractionType::Count, true),
               CoulombKernelType::Table);
 }
 
 TEST(KernelSetupTest, getCoulombKernelTypeTableTwin)
 {
-    EXPECT_EQ(getCoulombKernelType(Nbnxm::EwaldExclusionType::Table, CoulombInteractionType::Count, false),
+    EXPECT_EQ(getCoulombKernelType(gmx::EwaldExclusionType::Table, CoulombInteractionType::Count, false),
               CoulombKernelType::TableTwin);
 }
 
 TEST(KernelSetupTest, getCoulombKernelTypeEwald)
 {
-    EXPECT_EQ(getCoulombKernelType(Nbnxm::EwaldExclusionType::NotSet, CoulombInteractionType::Count, true),
+    EXPECT_EQ(getCoulombKernelType(gmx::EwaldExclusionType::NotSet, CoulombInteractionType::Count, true),
               CoulombKernelType::Ewald);
 }
 
 TEST(KernelSetupTest, getCoulombKernelTypeEwaldTwin)
 {
-    EXPECT_EQ(getCoulombKernelType(Nbnxm::EwaldExclusionType::NotSet, CoulombInteractionType::Count, false),
+    EXPECT_EQ(getCoulombKernelType(gmx::EwaldExclusionType::NotSet, CoulombInteractionType::Count, false),
               CoulombKernelType::EwaldTwin);
 }
 
 TEST(KernelSetupTest, getVdwKernelTypeLjCutCombGeomNone)
 {
-    EXPECT_EQ(getVdwKernelType(Nbnxm::KernelType::NotSet,
+    EXPECT_EQ(getVdwKernelType(NbnxmKernelType::NotSet,
                                LJCombinationRule::Geometric,
                                VanDerWaalsType::Cut,
                                InteractionModifiers::None,
@@ -103,7 +108,7 @@ TEST(KernelSetupTest, getVdwKernelTypeLjCutCombGeomNone)
 
 TEST(KernelSetupTest, getVdwKernelTypeLjCutCombGeomPotShift)
 {
-    EXPECT_EQ(getVdwKernelType(Nbnxm::KernelType::NotSet,
+    EXPECT_EQ(getVdwKernelType(NbnxmKernelType::NotSet,
                                LJCombinationRule::Geometric,
                                VanDerWaalsType::Cut,
                                InteractionModifiers::PotShift,
@@ -113,7 +118,7 @@ TEST(KernelSetupTest, getVdwKernelTypeLjCutCombGeomPotShift)
 
 TEST(KernelSetupTest, getVdwKernelTypeLjCutCombLBNone)
 {
-    EXPECT_EQ(getVdwKernelType(Nbnxm::KernelType::NotSet,
+    EXPECT_EQ(getVdwKernelType(NbnxmKernelType::NotSet,
                                LJCombinationRule::LorentzBerthelot,
                                VanDerWaalsType::Cut,
                                InteractionModifiers::None,
@@ -123,7 +128,7 @@ TEST(KernelSetupTest, getVdwKernelTypeLjCutCombLBNone)
 
 TEST(KernelSetupTest, getVdwKernelTypeLjCutCombLBPotShift)
 {
-    EXPECT_EQ(getVdwKernelType(Nbnxm::KernelType::NotSet,
+    EXPECT_EQ(getVdwKernelType(NbnxmKernelType::NotSet,
                                LJCombinationRule::LorentzBerthelot,
                                VanDerWaalsType::Cut,
                                InteractionModifiers::PotShift,
@@ -133,7 +138,7 @@ TEST(KernelSetupTest, getVdwKernelTypeLjCutCombLBPotShift)
 
 TEST(KernelSetupTest, getVdwKernelTypeLjCutCombNoneNone)
 {
-    EXPECT_EQ(getVdwKernelType(Nbnxm::KernelType::NotSet,
+    EXPECT_EQ(getVdwKernelType(NbnxmKernelType::NotSet,
                                LJCombinationRule::None,
                                VanDerWaalsType::Cut,
                                InteractionModifiers::None,
@@ -143,7 +148,7 @@ TEST(KernelSetupTest, getVdwKernelTypeLjCutCombNoneNone)
 
 TEST(KernelSetupTest, getVdwKernelTypeLjCutCombNonePotShift)
 {
-    EXPECT_EQ(getVdwKernelType(Nbnxm::KernelType::NotSet,
+    EXPECT_EQ(getVdwKernelType(NbnxmKernelType::NotSet,
                                LJCombinationRule::None,
                                VanDerWaalsType::Cut,
                                InteractionModifiers::PotShift,
@@ -153,7 +158,7 @@ TEST(KernelSetupTest, getVdwKernelTypeLjCutCombNonePotShift)
 
 TEST(KernelSetupTest, getVdwKernelTypeLjCutThrows)
 {
-    EXPECT_ANY_THROW(getVdwKernelType(Nbnxm::KernelType::NotSet,
+    EXPECT_ANY_THROW(getVdwKernelType(NbnxmKernelType::NotSet,
                                       LJCombinationRule::Count,
                                       VanDerWaalsType::Cut,
                                       InteractionModifiers::PotShift,
@@ -162,7 +167,7 @@ TEST(KernelSetupTest, getVdwKernelTypeLjCutThrows)
 
 TEST(KernelSetupTest, getVdwKernelTypeLjCutForceSwitch)
 {
-    EXPECT_EQ(getVdwKernelType(Nbnxm::KernelType::NotSet,
+    EXPECT_EQ(getVdwKernelType(NbnxmKernelType::NotSet,
                                LJCombinationRule::None,
                                VanDerWaalsType::Cut,
                                InteractionModifiers::ForceSwitch,
@@ -172,7 +177,7 @@ TEST(KernelSetupTest, getVdwKernelTypeLjCutForceSwitch)
 
 TEST(KernelSetupTest, getVdwKernelTypePmeGeom)
 {
-    EXPECT_EQ(getVdwKernelType(Nbnxm::KernelType::Cpu4x4_PlainC,
+    EXPECT_EQ(getVdwKernelType(NbnxmKernelType::Cpu4x4_PlainC,
                                LJCombinationRule::None,
                                VanDerWaalsType::Pme,
                                InteractionModifiers::Count,
@@ -182,7 +187,7 @@ TEST(KernelSetupTest, getVdwKernelTypePmeGeom)
 
 TEST(KernelSetupTest, getVdwKernelTypePmeNone)
 {
-    EXPECT_EQ(getVdwKernelType(Nbnxm::KernelType::Cpu4x4_PlainC,
+    EXPECT_EQ(getVdwKernelType(NbnxmKernelType::Cpu4x4_PlainC,
                                LJCombinationRule::None,
                                VanDerWaalsType::Pme,
                                InteractionModifiers::Count,
@@ -192,7 +197,7 @@ TEST(KernelSetupTest, getVdwKernelTypePmeNone)
 
 TEST(KernelSetupTest, getVdwKernelTypeLjCutPotSwitch)
 {
-    EXPECT_EQ(getVdwKernelType(Nbnxm::KernelType::NotSet,
+    EXPECT_EQ(getVdwKernelType(NbnxmKernelType::NotSet,
                                LJCombinationRule::None,
                                VanDerWaalsType::Cut,
                                InteractionModifiers::PotSwitch,
@@ -204,7 +209,7 @@ TEST(KernelSetupTest, getVdwKernelTypeAllCountThrows)
 {
     // Count cannot be used for VanDerWaalsType or InteractionModifiers because of calls to
     // enumValueToString(), which require a valid choice to have been made.
-    EXPECT_ANY_THROW(getVdwKernelType(Nbnxm::KernelType::NotSet,
+    EXPECT_ANY_THROW(getVdwKernelType(NbnxmKernelType::NotSet,
                                       LJCombinationRule::Count,
                                       VanDerWaalsType::Cut,
                                       InteractionModifiers::None,

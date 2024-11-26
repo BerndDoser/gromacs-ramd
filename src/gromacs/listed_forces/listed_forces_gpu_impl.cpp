@@ -45,15 +45,30 @@
 #include "config.h"
 
 #include <algorithm>
+#include <array>
+#include <memory>
 #include <string>
+#include <vector>
 
 #include "gromacs/listed_forces/listed_forces_gpu.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/mdtypes/inputrec.h"
+#include "gromacs/mdtypes/md_enums.h"
+#include "gromacs/topology/idef.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/message_string_collector.h"
+
+class DeviceContext;
+class DeviceStream;
+struct gmx_enerdata_t;
+struct gmx_ffparams_t;
+struct gmx_wallcycle;
 
 namespace gmx
 {
+struct NBAtomDataGpu;
+class StepWorkload;
 
 //! Returns whether there are any interactions in ilists suitable for a GPU.
 static bool someInteractionsCanRunOnGpu(const InteractionLists& ilists)
@@ -65,9 +80,9 @@ static bool someInteractionsCanRunOnGpu(const InteractionLists& ilists)
     // very unlikely to occur, and has little run-time cost,
     // so we don't complicate the code by catering for it
     // here.
-    return std::any_of(fTypesOnGpu.begin(), fTypesOnGpu.end(), [ilists](int fType) {
-        return !ilists[fType].iatoms.empty();
-    });
+    return std::any_of(fTypesOnGpu.begin(),
+                       fTypesOnGpu.end(),
+                       [ilists](int fType) { return !ilists[fType].iatoms.empty(); });
 }
 
 //! Returns whether there are any bonded interactions in the global topology suitable for a GPU.
@@ -100,6 +115,7 @@ bool buildSupportsListedForcesGpu(std::string* error)
     errorReasons.appendIf(GMX_DOUBLE, "Double precision build of GROMACS");
     errorReasons.appendIf(GMX_GPU_OPENCL, "OpenCL build of GROMACS");
     errorReasons.appendIf(!GMX_GPU, "CPU-only build of GROMACS");
+    errorReasons.appendIf(GMX_GPU_HIP, "HIP listed forces not implemented yet");
     errorReasons.finishContext();
     if (error != nullptr)
     {

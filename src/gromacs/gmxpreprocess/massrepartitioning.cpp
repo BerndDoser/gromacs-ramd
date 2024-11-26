@@ -34,8 +34,21 @@
 
 #include "massrepartitioning.h"
 
+#include <cstdio>
+
+#include <algorithm>
+#include <limits>
+#include <string>
+#include <string_view>
+#include <vector>
+
 #include "gromacs/fileio/warninp.h"
+#include "gromacs/topology/atoms.h"
+#include "gromacs/topology/idef.h"
+#include "gromacs/topology/ifunc.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/stringutil.h"
 
 namespace gmx
@@ -206,7 +219,7 @@ void repartitionAtomMasses(gmx_mtop_t* mtop, const bool useFep, const real massF
     {
         wi->addError(
                 "Light atoms are bound to at least one atom that has a too low mass for "
-                "repartioning");
+                "repartitioning");
     }
     if (numUnboundLightAtoms > 0)
     {

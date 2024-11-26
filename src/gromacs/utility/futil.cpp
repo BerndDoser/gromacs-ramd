@@ -46,11 +46,15 @@
 
 #include <filesystem>
 #include <mutex>
+#include <string>
 #include <system_error>
 #include <tuple>
 
 #include <sys/stat.h>
 #include <sys/types.h>
+
+#include "gromacs/utility/fileptr.h"
+#include "gromacs/utility/unique_cptr.h"
 
 #ifdef HAVE_UNISTD_H
 #    include <unistd.h>

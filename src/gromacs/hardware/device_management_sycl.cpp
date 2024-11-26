@@ -114,7 +114,7 @@ static std::optional<std::tuple<int, int>> getHardwareVersionNvidia(const sycl::
     {
         return result;
     }
-#if (GMX_SYCL_HIPSYCL && GMX_HIPSYCL_HAVE_CUDA_TARGET) // hipSYCL uses CUDA Runtime API
+#if (GMX_SYCL_ACPP && GMX_ACPP_HAVE_CUDA_TARGET) // hipSYCL uses CUDA Runtime API
     const int             nativeDeviceId = sycl::get_native<sycl::backend::cuda>(device);
     struct cudaDeviceProp prop;
     cudaError_t           status = cudaGetDeviceProperties(&prop, nativeDeviceId);
@@ -189,7 +189,7 @@ static std::optional<std::tuple<int, int, int>> getHardwareVersionAmd(const sycl
     {
         return result;
     }
-#if (GMX_SYCL_HIPSYCL && GMX_HIPSYCL_HAVE_HIP_TARGET)
+#if (GMX_SYCL_ACPP && GMX_ACPP_HAVE_HIP_TARGET)
     // Fall back on the native device query
     const int              nativeDeviceId = sycl::get_native<sycl::backend::hip>(device);
     struct hipDeviceProp_t prop;
@@ -326,16 +326,17 @@ static DeviceStatus isDeviceCompatible(const sycl::device&           syclDevice,
 #if GMX_GPU_NB_CLUSTER_SIZE == 4
         const std::vector<int> compiledNbnxmSubGroupSizes{ 8 };
 #elif GMX_GPU_NB_CLUSTER_SIZE == 8
-#    if GMX_SYCL_HIPSYCL && !(GMX_HIPSYCL_HAVE_HIP_TARGET)
+#    if GMX_SYCL_ACPP && !(GMX_ACPP_HAVE_HIP_TARGET)
         const std::vector<int> compiledNbnxmSubGroupSizes{ 32 }; // Only NVIDIA
-#    elif GMX_SYCL_HIPSYCL && (GMX_HIPSYCL_HAVE_HIP_TARGET && !GMX_HIPSYCL_ENABLE_AMD_RDNA_SUPPORT)
+#    elif GMX_SYCL_ACPP && (GMX_ACPP_HAVE_HIP_TARGET && !GMX_ENABLE_AMD_RDNA_SUPPORT)
         const std::vector<int> compiledNbnxmSubGroupSizes{ 64 }; // Only AMD GCN and CDNA
 #    else
         const std::vector<int> compiledNbnxmSubGroupSizes{ 32, 64 };
 #    endif
 #endif
 
-        const auto subGroupSizeSupportedByDevice = [&supportedSubGroupSizes](const int sgSize) -> bool {
+        const auto subGroupSizeSupportedByDevice = [&supportedSubGroupSizes](const int sgSize) -> bool
+        {
             return std::find(supportedSubGroupSizes.begin(), supportedSubGroupSizes.end(), sgSize)
                    != supportedSubGroupSizes.end();
         };
@@ -343,7 +344,7 @@ static DeviceStatus isDeviceCompatible(const sycl::device&           syclDevice,
                          compiledNbnxmSubGroupSizes.end(),
                          subGroupSizeSupportedByDevice))
         {
-#if GMX_SYCL_HIPSYCL && GMX_HIPSYCL_HAVE_HIP_TARGET && !GMX_HIPSYCL_ENABLE_AMD_RDNA_SUPPORT
+#if GMX_SYCL_ACPP && GMX_ACPP_HAVE_HIP_TARGET && !GMX_ENABLE_AMD_RDNA_SUPPORT
             if (supportedSubGroupSizes.size() == 1 && supportedSubGroupSizes[0] == 32
                 && deviceVendor == DeviceVendor::Amd)
             {
@@ -403,11 +404,15 @@ static bool isDeviceFunctional(const sycl::device& syclDevice, std::string* erro
             sycl::malloc_device<int>(numThreads, queue), [=](int* ptr) { sycl::free(ptr, queue); }
         };
         int* d_buffer = buffer.get();
-        queue.submit([&](sycl::handler& cgh) {
-                 sycl::range<1> range{ numThreads };
-                 cgh.parallel_for<DummyKernel>(
-                         range, [=](sycl::id<1> threadId) { d_buffer[threadId] = threadId.get(0); });
-             }).wait_and_throw();
+        queue.submit(
+                     [&](sycl::handler& cgh)
+                     {
+                         sycl::range<1> range{ numThreads };
+                         cgh.parallel_for<DummyKernel>(range,
+                                                       [=](sycl::id<1> threadId)
+                                                       { d_buffer[threadId] = threadId.get(0); });
+                     })
+                .wait_and_throw();
 
         std::vector<int> h_buffer(numThreads);
         queue.copy<int>(d_buffer, h_buffer.data(), numThreads).wait_and_throw();
@@ -512,10 +517,10 @@ static std::optional<sycl::backend> chooseBestBackend(const std::vector<std::uni
     if (countDevicesByBackend.size() > 1)
     {
         // Find backend with most devices
-        const auto backendWithMostDevices = std::max_element(
-                countDevicesByBackend.cbegin(),
-                countDevicesByBackend.cend(),
-                [](const auto& kv1, const auto& kv2) { return kv1.second < kv2.second; });
+        const auto backendWithMostDevices = std::max_element(countDevicesByBackend.cbegin(),
+                                                             countDevicesByBackend.cend(),
+                                                             [](const auto& kv1, const auto& kv2)
+                                                             { return kv1.second < kv2.second; });
         // Count devices provided by OpenCL. Will be zero if no OpenCL devices found.
         const int devicesInOpenCL = countDevicesByBackend[sycl::backend::opencl];
         if (devicesInOpenCL == backendWithMostDevices->second)
@@ -590,7 +595,7 @@ static std::vector<sycl::device> partitionDevices(const std::vector<sycl::device
 std::vector<std::unique_ptr<DeviceInformation>> findDevices()
 {
     std::vector<std::unique_ptr<DeviceInformation>> deviceInfos(0);
-    const std::vector<sycl::device> allDevices = sycl::device::get_devices(sycl::info::device_type::gpu);
+    std::vector<sycl::device> allDevices = sycl::device::get_devices(sycl::info::device_type::gpu);
     const std::vector<sycl::device> devices = partitionDevices(std::move(allDevices));
     deviceInfos.reserve(devices.size());
     for (const auto& syclDevice : devices)
@@ -599,6 +604,29 @@ std::vector<std::unique_ptr<DeviceInformation>> findDevices()
 
         size_t i = deviceInfos.size() - 1;
 
+        // Note SYCL_EXT_INTEL_DEVICE_INFO >= 5 is the first time a
+        // UUID query is available via
+        // sycl::ext::intel::info::device::uuid. It was available
+        // earlier under another name, but GROMACS isn't supporting
+        // such old versions of dpcpp.
+#if defined(SYCL_EXT_INTEL_DEVICE_INFO) && SYCL_EXT_INTEL_DEVICE_INFO >= 5
+        if (syclDevice.has(sycl::aspect::ext_intel_device_info_uuid))
+        {
+            // SYCL uses unsigned char (unlike CUDA, ROCM, and OpenCL) which
+            // we must convert to std::byte.
+            std::array<unsigned char, 16> uuidFromSycl =
+                    syclDevice.get_info<sycl::ext::intel::info::device::uuid>();
+            deviceInfos[i]->uuid = std::make_optional<std::array<std::byte, 16>>();
+            std::transform(uuidFromSycl.begin(),
+                           uuidFromSycl.end(),
+                           deviceInfos[i]->uuid.value().begin(),
+                           [](const unsigned char c) { return static_cast<std::byte>(c); });
+        }
+        else
+#endif
+        {
+            deviceInfos[i]->uuid = std::nullopt;
+        }
         deviceInfos[i]->id         = i;
         deviceInfos[i]->syclDevice = syclDevice;
         deviceInfos[i]->deviceVendor =
@@ -656,6 +684,20 @@ std::vector<std::unique_ptr<DeviceInformation>> findDevices()
                 deviceInfos[i]->hardwareVersionPatch = std::get<2>(*hwVersion);
             }
         }
+
+        deviceInfos[i]->maxWorkGroupSize =
+                syclDevice.get_info<sycl::info::device::max_work_group_size>();
+
+#if GMX_HAVE_GPU_GRAPH_SUPPORT && defined(SYCL_EXT_ONEAPI_GRAPH) && SYCL_EXT_ONEAPI_GRAPH
+        deviceInfos[i]->supportsSyclGraph = syclDevice.has(sycl::aspect::ext_oneapi_graph);
+#    if HAVE_SYCL_ASPECT_EXT_ONEAPI_LIMITED_GRAPH
+        // For now, we're ok with devices not supporting graph update
+        deviceInfos[i]->supportsSyclGraph = deviceInfos[i]->supportsSyclGraph
+                                            || syclDevice.has(sycl::aspect::ext_oneapi_limited_graph);
+#    endif
+#else
+        deviceInfos[i]->supportsSyclGraph = false;
+#endif
     }
 #if GMX_SYCL_DPCPP
     // Now, filter by the backend if we did not disable compatibility check
@@ -708,7 +750,7 @@ std::string getDeviceInformationString(const DeviceInformation& deviceInfo)
             }
         }
         return gmx::formatString(
-                "#%d: name: %s%s, vendor: %s, device version: %s, driver version %s, status: %s",
+                "#%d: name: %s%s, vendor: %s, device version: %s, driver version: %s, status: %s",
                 deviceInfo.id,
                 deviceInfo.syclDevice.get_info<sycl::info::device::name>().c_str(),
                 deviceArchitecture.c_str(),
@@ -717,4 +759,26 @@ std::string getDeviceInformationString(const DeviceInformation& deviceInfo)
                 deviceInfo.syclDevice.get_info<sycl::info::device::driver_version>().c_str(),
                 c_deviceStateString[deviceInfo.status]);
     }
+}
+
+void doubleCheckGpuAwareMpiWillWork(const DeviceInformation& deviceInfo)
+{
+#if GMX_SYCL_DPCPP
+    if (gmx::usingIntelMpi())
+    {
+        if (deviceInfo.syclDevice.get_platform().get_backend() == sycl::backend::opencl)
+        {
+            // Trying to use a device from e.g. an OpenCL backend
+            // leads to weird crashes when addresses are used out of
+            // context. That should only happen when the the LevelZero
+            // backend was unavailable *and* the user forced GROMACS to
+            // treat Intel MPI as GPU aware.
+            GMX_THROW(
+                    gmx::InvalidInputError("Intel MPI can only implement GPU-aware operations on "
+                                           "Intel devices using the LevelZero backend"));
+        }
+    }
+#else
+    GMX_UNUSED_VALUE(deviceInfo);
+#endif
 }

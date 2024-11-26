@@ -44,9 +44,13 @@
 #include <cstring>
 
 #include <algorithm>
+#include <array>
+#include <filesystem>
 #include <memory>
 #include <numeric>
 #include <optional>
+#include <string>
+#include <string_view>
 #include <unordered_set>
 
 #include <sys/types.h>
@@ -58,6 +62,7 @@
 #include "gromacs/gmxpreprocess/gpp_bond_atomtype.h"
 #include "gromacs/gmxpreprocess/gpp_nextnb.h"
 #include "gromacs/gmxpreprocess/grompp_impl.h"
+#include "gromacs/gmxpreprocess/notset.h"
 #include "gromacs/gmxpreprocess/readir.h"
 #include "gromacs/gmxpreprocess/topdirs.h"
 #include "gromacs/gmxpreprocess/toppush.h"
@@ -69,20 +74,28 @@
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/pbcutil/pbc.h"
+#include "gromacs/topology/atoms.h"
 #include "gromacs/topology/block.h"
 #include "gromacs/topology/exclusionblocks.h"
+#include "gromacs/topology/idef.h"
 #include "gromacs/topology/ifunc.h"
 #include "gromacs/topology/symtab.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/topology/topology_enums.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/futil.h"
 #include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/listoflists.h"
 #include "gromacs/utility/logger.h"
 #include "gromacs/utility/pleasecite.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/stringutil.h"
+
+struct t_nbparam;
 
 #define OPENDIR '['  /* starting sign for directive */
 #define CLOSEDIR ']' /* ending sign for directive   */
@@ -290,7 +303,8 @@ void checkRBDihedralSum(const gmx_mtop_t& mtop, const t_inputrec& ir, WarningHan
     // originally defined. We can however go through the molecule types and print one instance of
     // the offending dihedral.
 
-    auto generateMessage = [](int numDihedrals, const std::string& note, const std::string& involvedAtoms) {
+    auto generateMessage = [](int numDihedrals, const std::string& note, const std::string& involvedAtoms)
+    {
         return gmx::formatString(
                 "%d dihedrals with function type 3 (Ryckaert-Bellemans or Fourier) have "
                 "coefficients %s"
@@ -722,7 +736,7 @@ static char** read_topol(const char*                                 infile,
                                  * by making a "molecule" of the size of the system.
                                  */
                                 *intermolecular_interactions = std::make_unique<MoleculeInformation>();
-                                mi0                          = intermolecular_interactions->get();
+                                mi0 = intermolecular_interactions->get();
                                 mi0->initMolInfo();
                                 make_atoms_sys(*molblock, *molinfo, &mi0->atoms);
                             }
@@ -1034,7 +1048,7 @@ static char** read_topol(const char*                                 infile,
                                             "Excluding %d bonded neighbours molecule type '%s'",
                                             mi0->nrexcl,
                                             *mi0->name);
-                            sum_q(&mi0->atoms, nrcopies, &qt, &qBt);
+
                             if (!mi0->bProcessed)
                             {
                                 generate_excl(mi0->nrexcl, mi0->atoms.nr, mi0->interactions, &(mi0->excls));
@@ -1056,6 +1070,10 @@ static char** read_topol(const char*                                 infile,
                                 stupid_fill_block(&mi0->mols, mi0->atoms.nr, TRUE);
                                 mi0->bProcessed = TRUE;
                             }
+
+                            // After, potentially, applying decoupling we can accumulate the charge sum
+                            sum_q(&mi0->atoms, nrcopies, &qt, &qBt);
+
                             break;
                         }
                         default:

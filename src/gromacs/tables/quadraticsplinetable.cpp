@@ -44,10 +44,12 @@
 #include "quadraticsplinetable.h"
 
 #include <cmath>
+#include <cstdlib>
 
 #include <algorithm>
 #include <functional>
 #include <initializer_list>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -271,8 +273,8 @@ const real QuadraticSplineTable::defaultTolerance = 10.0 * GMX_FLOAT_EPS;
 
 
 QuadraticSplineTable::QuadraticSplineTable(std::initializer_list<AnalyticalSplineTableInput> analyticalInputList,
-                                           const std::pair<real, real>&                      range,
-                                           real tolerance) :
+                                           const std::pair<real, real>& range,
+                                           real                         tolerance) :
     numFuncInTable_(analyticalInputList.size()), range_(range)
 {
     // Sanity check on input values
@@ -367,8 +369,8 @@ QuadraticSplineTable::QuadraticSplineTable(std::initializer_list<AnalyticalSplin
 
 
 QuadraticSplineTable::QuadraticSplineTable(std::initializer_list<NumericalSplineTableInput> numericalInputList,
-                                           const std::pair<real, real>&                     range,
-                                           real tolerance) :
+                                           const std::pair<real, real>& range,
+                                           real                         tolerance) :
     numFuncInTable_(numericalInputList.size()), range_(range)
 {
     // Sanity check on input values

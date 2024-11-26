@@ -50,6 +50,8 @@
 #define GMX_AWH_POINTSTATE_H
 
 #include <cmath>
+#include <cstdint>
+#include <cstdlib>
 
 #include "gromacs/mdtypes/awh_history.h"
 #include "gromacs/mdtypes/awh_params.h"
@@ -481,10 +483,10 @@ private:
     double weightSumTot_;       /**< Accumulated weights, never reset or scaled. */
     double weightSumRef_; /**< The reference weight histogram determining the free energy updates */
     int64_t lastUpdateIndex_; /**< The last update that was performed at this point, in units of number of updates. */
-    double  logPmfSum_;          /**< Logarithm of the PMF histogram */
-    double  numVisitsIteration_; /**< Visits to this bin this iteration; note: only contains data for this Bias, even when sharing biases. */
-    double  numVisitsTot_;       /**< Accumulated visits to this bin */
-    double  localWeightSum_; /**< The contributed weight sum from the local Bias. This is used for computing the average shared friction metric. Never reset or scaled. */
+    double logPmfSum_;          /**< Logarithm of the PMF histogram */
+    double numVisitsIteration_; /**< Visits to this bin this iteration; note: only contains data for this Bias, even when sharing biases. */
+    double numVisitsTot_;       /**< Accumulated visits to this bin */
+    double localWeightSum_; /**< The contributed weight sum from the local Bias. This is used for computing the average shared friction metric. Never reset or scaled. */
 };
 
 } // namespace gmx

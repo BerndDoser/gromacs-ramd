@@ -48,18 +48,15 @@
 #include <memory>
 #include <vector>
 
+#include "gromacs/domdec/domdec_zones.h"
 #include "gromacs/gpu_utils/hostallocator.h"
 #include "gromacs/math/vectypes.h"
 #include "gromacs/topology/block.h"
 #include "gromacs/topology/idef.h"
+#include "gromacs/utility/defaultinitializationallocator.h"
 #include "gromacs/utility/gmxmpi.h"
 #include "gromacs/utility/range.h"
 #include "gromacs/utility/real.h"
-
-//! Max number of zones in domain decomposition
-#define DD_MAXZONE 8
-//! Max number of izones in domain decomposition
-#define DD_MAXIZONE 4
 
 struct AtomDistribution;
 struct gmx_domdec_comm_t;
@@ -74,59 +71,13 @@ struct ReverseTopOptions;
 
 namespace gmx
 {
+class HaloExchange;
 template<typename T>
 class HashedMap;
 class LocalAtomSetManager;
 class LocalTopologyChecker;
 class GpuHaloExchange;
 } // namespace gmx
-
-/*! \internal
- * \brief Pair interaction zone and atom range for an i-zone
- */
-struct DDPairInteractionRanges
-{
-    //! The index of this i-zone in the i-zone list
-    int iZoneIndex = -1;
-    //! The range of j-zones
-    gmx::Range<int> jZoneRange;
-    //! The i-atom range
-    gmx::Range<int> iAtomRange;
-    //! The j-atom range
-    gmx::Range<int> jAtomRange;
-    //! Minimum shifts to consider
-    gmx::IVec shift0 = { 0, 0, 0 };
-    //! Maximum shifts to consider
-    gmx::IVec shift1 = { 0, 0, 0 };
-};
-
-typedef struct gmx_domdec_zone_size
-{
-    /* Zone lower corner in triclinic coordinates         */
-    gmx::RVec x0 = { 0, 0, 0 };
-    /* Zone upper corner in triclinic coordinates         */
-    gmx::RVec x1 = { 0, 0, 0 };
-    /* Zone bounding box lower corner in Cartesian coords */
-    gmx::RVec bb_x0 = { 0, 0, 0 };
-    /* Zone bounding box upper corner in Cartesian coords */
-    gmx::RVec bb_x1 = { 0, 0, 0 };
-} gmx_domdec_zone_size_t;
-
-struct gmx_domdec_zones_t
-{
-    /* The number of zones including the home zone */
-    int n = 0;
-    /* The shift of the zones with respect to the home zone */
-    std::array<gmx::IVec, DD_MAXZONE> shift;
-    /* The charge group boundaries for the zones */
-    std::array<int, DD_MAXZONE + 1> cg_range;
-    /* The pair interaction zone and atom ranges per each i-zone */
-    std::vector<DDPairInteractionRanges> iZones;
-    /* Boundaries of the zones */
-    std::array<gmx_domdec_zone_size_t, DD_MAXZONE> size;
-    /* The cg density of the home zone */
-    real dens_zone0 = 0;
-};
 
 struct gmx_ddbox_t
 {
@@ -162,7 +113,7 @@ struct UnitCellInfo
 struct gmx_domdec_t
 { //NOLINT(clang-analyzer-optin.performance.Padding)
     //! Constructor, only partial for now
-    gmx_domdec_t(const t_inputrec& ir);
+    gmx_domdec_t(const t_inputrec& ir, gmx::ArrayRef<const int> ddDims);
     ~gmx_domdec_t();
 
     /* The DD particle-particle nodes only */
@@ -195,6 +146,9 @@ struct gmx_domdec_t
     /* Forward and backward neighboring cells, indexed by 0 to ndim */
     int neighbor[DIM][2] = { { 0, 0 }, { 0, 0 }, { 0, 0 } };
 
+    /* The shift, atom ranges and dimensions of the DD zones */
+    gmx::DomdecZones zones;
+
     /* Only available on the main node */
     std::unique_ptr<AtomDistribution> ma;
 
@@ -217,7 +171,7 @@ struct gmx_domdec_t
     int numHomeAtoms = 0;
 
     /* Index from the local atoms to the global atoms, covers home and received zones */
-    std::vector<int> globalAtomIndices;
+    gmx::FastVector<int> globalAtomIndices;
 
     /* Global atom number to local atom number list */
     std::unique_ptr<gmx_ga2la_t> ga2la;
@@ -225,7 +179,13 @@ struct gmx_domdec_t
     /* Communication stuff */
     std::unique_ptr<gmx_domdec_comm_t> comm;
 
-    /* The partioning count, to keep track of the state */
+    //! The number of communication pulses along the Cartesian dimension
+    gmx::IVec numPulses = { 0, 0, 0 };
+
+    /* The halo communication setup */
+    std::unique_ptr<gmx::HaloExchange> haloExchange;
+
+    /* The partitioning count, to keep track of the state */
     int64_t ddp_count = 0;
 
     /* The managed atom sets that are updated in domain decomposition */
@@ -239,6 +199,17 @@ struct gmx_domdec_t
 
     /* GPU halo exchange objects: this structure supports a vector of pulses for each dimension */
     std::vector<std::unique_ptr<gmx::GpuHaloExchange>> gpuHaloExchange[DIM];
+};
+
+/*! Return whether \p globalAtomIndex is a valid global atom (and not a filler particle)
+ *
+ * \param[in] globalAtomIndex  The index in the global topology to check
+ *
+ * \returns true when \p globalAtomIndex >= 0, false otherwise
+ */
+static inline bool isValidGlobalAtom(const int globalAtomIndex)
+{
+    return globalAtomIndex >= 0;
 };
 
 //! Are we the main node for domain decomposition

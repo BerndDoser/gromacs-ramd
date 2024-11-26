@@ -50,6 +50,7 @@
 
 #include "gromacs/onlinehelp/helptopic.h"
 #include "gromacs/onlinehelp/helpwritercontext.h"
+#include "gromacs/selection/selvalue.h"
 #include "gromacs/utility/classhelpers.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/gmxassert.h"
@@ -142,7 +143,7 @@ const char* const CmdLineHelpText::text[]  = {
     "have been provided.",
     "As a special case, [TT]-sf[tt] provided on its own, without preceding",
     "selection arguments, assigns the selections to all (yet unset) required",
-    "selections (i.e., those that would be promted interactively if no",
+    "selections (i.e., those that would be prompted interactively if no",
     "selections are provided on the command line).[PAR]",
 
     "To use groups from a traditional index file, use argument [TT]-n[tt]",
@@ -702,7 +703,7 @@ void KeywordsHelpTopic::printKeywordList(const HelpWriterContext& context, e_sel
         const bool                 bIsModifier = (method.flags & SMETH_MODIFIER) != 0;
         if (method.type == type && bModifiers == bIsModifier)
         {
-            const bool bHasHelp       = (method.help.nlhelp > 0 && method.help.help != nullptr);
+            const bool bHasHelp = (method.help.nlhelp > 0 && method.help.help != nullptr);
             const bool bPrintHelpMark = bHasHelp && context.outputFormat() == eHelpOutputFormat_Console;
             file.writeString(formatString("   %c ", bPrintHelpMark ? '+' : ' '));
             if (method.help.syntax != nullptr)

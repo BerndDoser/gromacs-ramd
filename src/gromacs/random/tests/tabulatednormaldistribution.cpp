@@ -41,16 +41,26 @@
 
 #include "gromacs/random/tabulatednormaldistribution.h"
 
+#include <cmath>
+#include <cstddef>
+
+#include <array>
+#include <string>
+#include <vector>
+
 #include <gtest/gtest.h>
 
+#include "gromacs/random/seed.h"
 #include "gromacs/random/threefry.h"
+#include "gromacs/utility/real.h"
 
 #include "testutils/refdata.h"
 #include "testutils/testasserts.h"
 
 namespace gmx
 {
-
+namespace test
+{
 namespace
 {
 
@@ -183,5 +193,5 @@ TEST(TabulatedNormalDistributionTableTest, HasValidProperties)
 }
 
 } // namespace
-
+} // namespace test
 } // namespace gmx

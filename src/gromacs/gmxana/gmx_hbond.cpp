@@ -35,23 +35,31 @@
 
 #include "config.h"
 
+#include <climits>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
 #include <algorithm>
 #include <array>
+#include <filesystem>
 #include <numeric>
+#include <string>
 #include <type_traits>
 #include <vector>
 
+#include "gromacs/commandline/filenm.h"
 #include "gromacs/commandline/pargs.h"
 #include "gromacs/commandline/viewit.h"
 #include "gromacs/correlationfunctions/autocorr.h"
 #include "gromacs/correlationfunctions/crosscorr.h"
 #include "gromacs/correlationfunctions/expfit.h"
 #include "gromacs/correlationfunctions/integrate.h"
+#include "gromacs/fileio/filetypes.h"
 #include "gromacs/fileio/matio.h"
+#include "gromacs/fileio/oenv.h"
+#include "gromacs/fileio/rgb.h"
 #include "gromacs/fileio/tpxio.h"
 #include "gromacs/fileio/trxio.h"
 #include "gromacs/fileio/xvgr.h"
@@ -61,23 +69,33 @@
 #include "gromacs/math/units.h"
 #include "gromacs/math/utilities.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/mdtypes/inputrec.h"
+#include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/pbcutil/pbc.h"
+#include "gromacs/topology/atoms.h"
+#include "gromacs/topology/idef.h"
 #include "gromacs/topology/ifunc.h"
 #include "gromacs/topology/index.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/arraysize.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/futil.h"
+#include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/gmxomp.h"
 #include "gromacs/utility/pleasecite.h"
 #include "gromacs/utility/programcontext.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/snprintf.h"
 #include "gromacs/utility/stringutil.h"
+
+struct gmx_output_env_t;
 
 static constexpr int sc_maxHydrogenExchange = 7;
 using HydrogenExchangeData                  = std::array<int, sc_maxHydrogenExchange>;
@@ -118,10 +136,10 @@ static gmx_bool bDebug = FALSE;
 #define HB_NR (1 << 2)
 static constexpr int sc_maxNumHydrogens = 4;
 
-#define ISHB(h) ((h)&2)
-#define ISDIST(h) ((h)&1)
-#define ISDON(h) ((h)&c_donorMask)
-#define ISINGRP(h) ((h)&c_inGroupMask)
+#define ISHB(h) ((h) & 2)
+#define ISDIST(h) ((h) & 1)
+#define ISDON(h) ((h) & c_donorMask)
+#define ISINGRP(h) ((h) & c_inGroupMask)
 
 struct HydrogenCellType
 {
@@ -2795,7 +2813,7 @@ int gmx_hbond(int argc, char* argv[])
      * instead of forking anew at every frame. */
 
 #pragma omp parallel firstprivate(i, h, dist, ang) private( \
-        j, xi, yi, zi, xj, yj, zj, ogrp, ai, aj, xjj, yjj, zjj, ihb, resdist, k, bTric, bEdge_xjj, bEdge_yjj) default(shared)
+                j, xi, yi, zi, xj, yj, zj, ogrp, ai, aj, xjj, yjj, zjj, ihb, resdist, k, bTric, bEdge_xjj, bEdge_yjj) default(shared)
     { /* Start of parallel region */
         const int threadNr = (bOMP) ? gmx_omp_get_thread_num() : 0;
 
@@ -2978,12 +2996,12 @@ int gmx_hbond(int argc, char* argv[])
                                                         }
                                                     }
                                                 } /* for aj  */
-                                            }     /* for xjj */
-                                        }         /* for yjj */
-                                    }             /* for zjj */
-                                }                 /* for ai  */
-                            }                     /* for grp */
-                        }                         /* for xi,yi,zi */
+                                            } /* for xjj */
+                                        } /* for yjj */
+                                    } /* for zjj */
+                                } /* for ai  */
+                            } /* for grp */
+                        } /* for xi,yi,zi */
                     }
                 }
                 GMX_CATCH_ALL_AND_EXIT_WITH_FATAL_ERROR

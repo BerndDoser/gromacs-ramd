@@ -49,6 +49,9 @@
 
 #include "gromacs/analysisdata/modules/average.h"
 
+#include <memory>
+#include <string>
+
 #include <gtest/gtest.h>
 
 #include "gromacs/analysisdata/analysisdata.h"
@@ -58,6 +61,10 @@
 
 using gmx::test::AnalysisDataTestInput;
 
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
@@ -286,3 +293,5 @@ TEST_F(FrameAverageModuleTest, HandlesMultipleDataSets)
 }
 
 } // namespace
+} // namespace test
+} // namespace gmx

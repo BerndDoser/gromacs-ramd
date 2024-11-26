@@ -40,16 +40,25 @@
 #include <cstring>
 
 #include <algorithm>
+#include <filesystem>
+#include <memory>
+#include <optional>
+#include <string>
+#include <vector>
 
 #include "gromacs/gmxpreprocess/gpp_atomtype.h"
 #include "gromacs/gmxpreprocess/grompp_impl.h"
 #include "gromacs/gmxpreprocess/notset.h"
 #include "gromacs/gmxpreprocess/topdirs.h"
+#include "gromacs/topology/atoms.h"
 #include "gromacs/topology/block.h"
 #include "gromacs/topology/ifunc.h"
 #include "gromacs/topology/symtab.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/strconvert.h"
 #include "gromacs/utility/stringutil.h"
@@ -154,7 +163,14 @@ static void print_bt(FILE*                                   out,
     /* print bondtypes */
     for (const auto& parm : bt->interactionTypes)
     {
-        bSwapParity                    = (parm.c0() == NOTSET) && (parm.c1() == -1);
+        if (ftype == F_CMAP)
+        {
+            bSwapParity = false;
+        }
+        else
+        {
+            bSwapParity = (parm.c0() == NOTSET) && (parm.c1() == -1);
+        }
         gmx::ArrayRef<const int> atoms = parm.atoms();
         if (!bDih)
         {

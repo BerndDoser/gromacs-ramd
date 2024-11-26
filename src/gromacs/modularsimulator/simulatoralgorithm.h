@@ -47,16 +47,30 @@
 #ifndef GROMACS_MODULARSIMULATOR_SIMULATORALGORITHM_H
 #define GROMACS_MODULARSIMULATOR_SIMULATORALGORITHM_H
 
+#include <cstdio>
+
 #include <any>
+#include <functional>
+#include <limits>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <typeinfo>
+#include <utility>
+#include <vector>
 
+#include "gromacs/compat/pointers.h"
+#include "gromacs/mdlib/simulationsignal.h"
+#include "gromacs/mdlib/stophandler.h"
 #include "gromacs/mdrun/isimulator.h"
 #include "gromacs/mdtypes/observablesreducer.h"
 #include "gromacs/mdtypes/state.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/exceptions.h"
+#include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/stringutil.h"
 
 #include "checkpointhelper.h"
 #include "domdechelper.h"
@@ -67,6 +81,13 @@
 #include "topologyholder.h"
 #include "trajectoryelement.h"
 
+struct gmx_wallcycle;
+struct gmx_walltime_accounting;
+struct t_commrec;
+struct t_forcerec;
+struct t_inputrec;
+struct t_nrnb;
+
 namespace gmx
 {
 enum class IntegrationStage;
@@ -76,6 +97,10 @@ class ResetHandler;
 template<IntegrationStage integrationStage>
 class Propagator;
 class TopologyHolder;
+class MDLogger;
+class ReadCheckpointDataHolder;
+class StatePropagatorData;
+struct MdrunOptions;
 
 /*! \internal
  * \ingroup module_modularsimulator
@@ -143,7 +168,7 @@ private:
      * eliminated by rewriting the stop and reset handler to fit the
      * modular simulator approach.
      */
-    void preStep(Step step, Time time, bool isNeighborSearchingStep);
+    void preStep(Step step, Time time);
 
     /*! \brief A function called after every step
      *
@@ -254,8 +279,6 @@ private:
 
     // TODO: This is a hack for stop handler - needs to go once StopHandler
     //       is adapted to the modular simulator
-    //! Whether this is a neighbor-searching step
-    bool stophandlerIsNSStep_ = false;
     //! The current step
     Step stophandlerCurrentStep_ = -1;
 
@@ -394,7 +417,7 @@ class ModularSimulatorAlgorithmBuilder final
 {
 public:
     //! Constructor
-    ModularSimulatorAlgorithmBuilder(compat::not_null<LegacySimulatorData*>    legacySimulatorData,
+    ModularSimulatorAlgorithmBuilder(compat::not_null<LegacySimulatorData*> legacySimulatorData,
                                      std::unique_ptr<ReadCheckpointDataHolder> checkpointDataHolder);
     //! Build algorithm
     ModularSimulatorAlgorithm build();
@@ -655,14 +678,14 @@ void ModularSimulatorAlgorithmBuilder::add(Args&&... args)
 
 //! Returns a pointer casted to type Base if the Element is derived from Base
 template<typename Base, typename Element>
-static std::enable_if_t<std::is_base_of<Base, Element>::value, Base*> castOrNull(Element* element)
+static std::enable_if_t<std::is_base_of_v<Base, Element>, Base*> castOrNull(Element* element)
 {
     return static_cast<Base*>(element);
 }
 
 //! Returns a nullptr of type Base if Element is not derived from Base
 template<typename Base, typename Element>
-static std::enable_if_t<!std::is_base_of<Base, Element>::value, Base*> castOrNull(Element gmx_unused* element)
+static std::enable_if_t<!std::is_base_of_v<Base, Element>, Base*> castOrNull(Element gmx_unused* element)
 {
     return nullptr;
 }

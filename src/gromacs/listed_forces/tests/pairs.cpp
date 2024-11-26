@@ -53,8 +53,13 @@
 
 #include <cmath>
 
+#include <filesystem>
+#include <iterator>
 #include <memory>
+#include <string>
+#include <tuple>
 #include <unordered_map>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -68,15 +73,19 @@
 #include "gromacs/mdtypes/forcerec.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/interaction_const.h"
+#include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/mdtypes/mdatom.h"
-#include "gromacs/mdtypes/nblist.h"
 #include "gromacs/mdtypes/simulation_workload.h"
 #include "gromacs/pbcutil/ishift.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/tables/forcetable.h"
 #include "gromacs/topology/idef.h"
+#include "gromacs/topology/ifunc.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/booltype.h"
 #include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/fatalerror.h"
+#include "gromacs/utility/real.h"
 #include "gromacs/utility/strconvert.h"
 #include "gromacs/utility/stringstream.h"
 #include "gromacs/utility/textwriter.h"
@@ -180,7 +189,7 @@ public:
         // set data in fr
         real tableRange = 2.9;
         fr_.pairsTable = make_tables(nullptr, fr_.ic.get(), nullptr, tableRange, GMX_MAKETABLES_14ONLY);
-        fr_.efep       = haveFep_;
+        fr_.efep             = haveFep_;
         fr_.fudgeQQ          = 0.5;
         fr_.use_simd_kernels = useSimd_;
         fr_.bMolPBC          = haveMolPBC_;

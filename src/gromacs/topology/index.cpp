@@ -37,11 +37,16 @@
 
 #include <cassert>
 #include <cctype>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
 #include <algorithm>
+#include <filesystem>
 #include <numeric>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "gromacs/topology/atoms.h"
 #include "gromacs/topology/block.h"
@@ -49,9 +54,11 @@
 #include "gromacs/topology/residuetypes.h"
 #include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/arraysize.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/futil.h"
+#include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/listoflists.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/strdb.h"
@@ -236,9 +243,10 @@ static void analyse_other(gmx::ArrayRef<std::string> restype,
                 && gmx_strcasecmp(restype[resind].c_str(), "RNA")
                 && gmx_strcasecmp(restype[resind].c_str(), "Water"))
             {
-                auto found = std::find_if(restp.begin(), restp.end(), [rname](const auto& entry) {
-                    return strcmp(entry.rname, rname) == 0;
-                });
+                auto found = std::find_if(restp.begin(),
+                                          restp.end(),
+                                          [rname](const auto& entry)
+                                          { return strcmp(entry.rname, rname) == 0; });
                 if (found == restp.end())
                 {
                     restp.emplace_back();
@@ -272,9 +280,10 @@ static void analyse_other(gmx::ArrayRef<std::string> restype,
                     for (size_t k = 0; (k < aid.size()); k++)
                     {
                         const char* aname = *atoms->atomname[aid[k]];
-                        auto found = std::find_if(attp.begin(), attp.end(), [aname](const char* entry) {
-                            return strcmp(aname, entry) == 0;
-                        });
+                        auto        found = std::find_if(attp.begin(),
+                                                  attp.end(),
+                                                  [aname](const char* entry)
+                                                  { return strcmp(aname, entry) == 0; });
                         if (found == attp.end())
                         {
                             attp.emplace_back(aname);
@@ -842,7 +851,7 @@ int find_group(const char* s, gmx::ArrayRef<const IndexGroup> indexGroups)
     return findGroupTemplated(s, indexGroups);
 }
 
-int find_group(const char* s, int ngrps, char** grpname)
+int find_group(const char* s, int ngrps, const char* const* grpname)
 {
     return findGroupTemplated(s, gmx::constArrayRefFromArray<const char*>(grpname, ngrps));
 }

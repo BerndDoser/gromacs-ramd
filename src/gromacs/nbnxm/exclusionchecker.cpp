@@ -44,14 +44,23 @@
 
 #include "gromacs/nbnxm/exclusionchecker.h"
 
+#include <functional>
+#include <utility>
+#include <vector>
+
 #include "gromacs/gmxlib/network.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/observablesreducer.h"
+#include "gromacs/topology/atoms.h"
 #include "gromacs/topology/idef.h"
 #include "gromacs/topology/ifunc.h"
 #include "gromacs/topology/mtop_util.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/fatalerror.h"
+#include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/listoflists.h"
 
 /*! \brief Data to help check local topology construction
  *
@@ -150,13 +159,15 @@ ExclusionChecker::ExclusionChecker(const t_commrec*                cr,
 
     Impl*                                               impl = impl_.get();
     gmx::ObservablesReducerBuilder::CallbackFromBuilder callbackFromBuilder =
-            [impl](gmx::ObservablesReducerBuilder::CallbackToRequireReduction c, gmx::ArrayRef<double> v) {
-                impl->callbackToRequireReduction_ = std::move(c);
-                impl->reductionBuffer_            = v;
-            };
+            [impl](gmx::ObservablesReducerBuilder::CallbackToRequireReduction c, gmx::ArrayRef<double> v)
+    {
+        impl->callbackToRequireReduction_ = std::move(c);
+        impl->reductionBuffer_            = v;
+    };
 
     // Make the callback that runs afer reduction.
-    gmx::ObservablesReducerBuilder::CallbackAfterReduction callbackAfterReduction = [impl](gmx::Step /*step*/) {
+    gmx::ObservablesReducerBuilder::CallbackAfterReduction callbackAfterReduction = [impl](gmx::Step /*step*/)
+    {
         // Pass the total after reduction to the check
         impl->check(impl->reductionBuffer_[0]);
     };
