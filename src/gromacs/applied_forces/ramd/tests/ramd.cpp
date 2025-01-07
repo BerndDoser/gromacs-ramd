@@ -33,7 +33,7 @@
  */
 #include "gmxpre.h"
 
-#include "gromacs/ramd/ramd.h"
+#include "gromacs/applied_forces/ramd/ramd.h"
 
 #include <gtest/gtest.h>
 
