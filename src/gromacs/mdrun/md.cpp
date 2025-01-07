@@ -153,7 +153,6 @@
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/pulling/output.h"
 #include "gromacs/pulling/pull.h"
-#include "gromacs/ramd/ramd.h"
 #include "gromacs/swap/swapcoords.h"
 #include "gromacs/taskassignment/include/gromacs/taskassignment/decidesimulationworkload.h"
 #include "gromacs/timing/wallcycle.h"
@@ -647,15 +646,6 @@ void gmx::LegacySimulator::do_md()
 
     int64_t step     = ir->init_step;
     int64_t step_rel = 0;
-
-    /* RAMD */
-    std::unique_ptr<RAMD> ramd = nullptr;
-    if (ir->bRAMD)
-    {
-        ramd = std::make_unique<RAMD>(
-                *ir->ramdParams, pullWork_, startingBehavior_, cr_, nFile_, fnm_, oenv_, fpLog_);
-        fr_->forceProviders->addForceProvider(ramd.get());
-    }
 
     /* To minimize communication, compute_globals computes the COM velocity
      * and the kinetic energy for the velocities without COM motion removed.
@@ -1214,6 +1204,7 @@ void gmx::LegacySimulator::do_md()
         if (!simulationWork.useMdGpuGraph || mdGraph->graphIsCapturingThisStep()
             || !mdGraph->useGraphThisStep())
         {
+
             if (shellfc)
             {
                 /* Now is the time to relax the shells */
@@ -1447,8 +1438,7 @@ void gmx::LegacySimulator::do_md()
                                      bRerunMD,
                                      bLastStep,
                                      mdrunOptions_.writeConfout,
-                                     ekindataState,
-                                     ir->bRAMD && ramd->getWriteTrajectoryAndReset());
+                                     ekindataState);
             /* Check if IMD step and do IMD communication, if bIMD is TRUE. */
             bInteractiveMDstep = imdSession_->run(step, bNS, state_->box, state_->x, t);
 
@@ -2025,7 +2015,7 @@ void gmx::LegacySimulator::do_md()
                 printLambdaStateToLog(fpLog_, state_->lambda, isInitialOutput);
             }
 
-            if (ir->bPull || ir->bRAMD)
+            if (ir->bPull)
             {
                 pull_print_output(pullWork_, step, t);
             }

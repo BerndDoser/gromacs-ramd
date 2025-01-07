@@ -43,7 +43,7 @@
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/ramd_params.h"
-#include "gromacs/ramd/randomsphericaldirectiongenerator.h"
+#include "gromacs/applied_forces/ramd/randomsphericaldirectiongenerator.h"
 
 struct pull_t;
 
